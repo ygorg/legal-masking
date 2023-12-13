@@ -1,5 +1,8 @@
 # data_collator_setup.py
+import logging
+
 from transformers import DataCollatorForWholeWordMask
+
 
 def initialize_data_collator(tokenizer):
     return DataCollatorForWholeWordMask(
@@ -12,5 +15,10 @@ def demonstrate_data_collator(data_collator, tokenized_datasets, tokenizer, num_
     for sample in samples:
         _ = sample.pop("word_ids")
 
+
+    logging.info("====================================================================")
+    logging.info("Example of masked document")
+    logging.info("====================================================================")
+
     for chunk in data_collator(samples)["input_ids"]:
-        print(f"\n'>>> {tokenizer.decode(chunk)}'")
+        logging.info(f"\n'>>> {tokenizer.decode(chunk)}'")

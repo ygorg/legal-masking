@@ -1,16 +1,21 @@
 # model_trainer.py
-from transformers import AutoModelForMaskedLM, TrainingArguments, Trainer
 import math
-import torch
+import logging
 
-def initialize_model_and_trainer(tokenized_datasets, data_collator, tokenizer,version=1,batch_size=8, num_epochs=3, model_checkpoint="models/bert-base-uncased"):
+import torch
+from transformers import AutoModelForMaskedLM, TrainingArguments, Trainer
+
+def initialize_model_and_trainer(
+        tokenized_datasets, data_collator, tokenizer,
+        output_dir, model_checkpoint,
+        batch_size, num_epochs
+    ):
+
     model = AutoModelForMaskedLM.from_pretrained(model_checkpoint)
     device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
-    print("=========================================================")
-    print(f"Using device: {device}")
+    logging.info("=========================================================")
+    logging.info(f"Using device: {device}")
     model.to(device)
-    model_name = model_checkpoint.split("/")[-1]
-    output_dir = f"models/{model_name}-baseline-v{version}"     
     logging_steps = len(tokenized_datasets["train"]) // batch_size
 
     # Define training arguments
@@ -53,6 +58,6 @@ def train_and_evaluate(trainer):
 
     # Perform evaluation after training
     eval_results = trainer.evaluate()
-    print(f">>> Perplexity after training: {math.exp(eval_results['eval_loss']):.2f}")
+    logging.info(f">>> Perplexity after training: {math.exp(eval_results['eval_loss']):.2f}")
 
     return eval_results

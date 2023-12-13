@@ -1,5 +1,6 @@
 # my_tokenize.py
 from transformers import AutoModelForMaskedLM, AutoTokenizer
+
 from data_setup import create_small_datasets
 
 def initialize_tokenizer(model_checkpoint="models/bert-base-uncased"):
