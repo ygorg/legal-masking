@@ -1,8 +1,10 @@
+# data_setup.py
 import os
 import json
 from datasets import Dataset
 
 def create_small_datasets(data_dir, num_examples=100):
+    # ... [Existing function code remains unchanged]
     def load_dataset_from_json(file_path):
         try:
             with open(file_path, 'r') as file:
@@ -18,6 +20,8 @@ def create_small_datasets(data_dir, num_examples=100):
         file_path = os.path.join(data_dir, f'{split}.json')
         if os.path.exists(file_path):
             print(f"Loading dataset from {file_path}")
+            # To take all dataset : Add this line code: dataset_dict[split] = load_dataset_from_json(file_path)
+            # Remove if dataset: ....
             dataset = load_dataset_from_json(file_path)
             if dataset:
                 dataset_dict[split] = dataset.select(range(min(num_examples, len(dataset))))
@@ -28,13 +32,3 @@ def create_small_datasets(data_dir, num_examples=100):
 
     return dataset_dict
 
-# Usage
-#data_directory = './data'  # Make sure to use the correct path
-#small_datasets = create_small_datasets(data_directory, 100)
-
-# Check if data is returned
-#if small_datasets:
-#    for split, ds in small_datasets.items():
-#        print(f"{split} dataset: {len(ds)} records")
-#else:
-#    print("No datasets were created.")
