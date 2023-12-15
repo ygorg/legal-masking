@@ -46,11 +46,25 @@ def initialize_tokenizer(model_checkpoint="models/bert-base-uncased"):
 # my_tokenizer.py
 def tokenize_function(tokenizer, examples):
     result = tokenizer(examples["text"])
-    if tokenizer.is_fast:
-        result["word_ids"] = [result.word_ids(i) for i in range(len(result["input_ids"]))]
+    #if tokenizer.is_fast:
+    #    result["word_ids"] = [result.word_ids(i) for i in range(len(result["input_ids"]))]
     return result
 
-def group_texts(chunk_size, examples):
+
+def pretokenize_function(tokenizer, examples):
+    """Returns text tokenized on words and not subwords"""
+    pretokenized = []
+    for txt in examples['text']:
+        txt = tokenizer.backend_tokenizer.normalizer.normalize_str(txt)
+        txt = tokenizer.backend_tokenizer.pre_tokenizer.pre_tokenize_str(txt)
+        txt = [t for t, off in txt]
+        pretokenized.append(txt)
+    examples['pretokenized'] = pretokenized
+    return examples
+        
+
+
+def group_texts(examples, chunk_size):
     # Process each example (document) individually
     result = {key: [] for key in examples.keys()}
     for index in range(len(examples["input_ids"])):
