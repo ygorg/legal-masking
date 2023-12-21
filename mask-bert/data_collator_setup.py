@@ -40,14 +40,14 @@ def demonstrate_data_collator(data_collator, tokenized_datasets, tokenizer, num_
 
 
 def compute_token_importance(example, tokenizer, score_token):
-    cand_indexes = []
-
-
+    # From DataCollator.pytorch_call
     ref_tokens = []
     for id in tolist(example["input_ids"]):
         token = tokenizer._convert_id_to_token(id)
         ref_tokens.append(token)
 
+    # From DataCollator.whole_word_mask
+    cand_indexes = []
     words = []  # === Reconstruct words to give to scoring function
     for i, token in enumerate(ref_tokens):
         if token == "[CLS]" or token == "[SEP]":
@@ -60,7 +60,7 @@ def compute_token_importance(example, tokenizer, score_token):
             cand_indexes.append([i])
             words.append(token)  # ===
 
-    example['importance_weight'] = score_token(words)
+    example['importance_weight'] = score_token(words, normalize=False)
     return example
 
 

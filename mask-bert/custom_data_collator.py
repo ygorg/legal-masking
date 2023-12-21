@@ -121,72 +121,6 @@ def tolist(x):
 
 
 @dataclass
-class DataCollatorForTermSpecificMasking_V1(DataCollatorForWholeWordMask):
-    # A function taking a list of words and returns a float score for each
-    rng: np.random.Generator = np.random.default_rng(seed=12345)
-    score_token: Callable[[list[str]], list[float]] = lambda l: [1/len(l)] * len(l)
-
-    def _whole_word_mask(self, input_tokens: List[str], max_predictions=512):
-        """
-        Get 0/1 labels for masked tokens with whole word mask proxy
-        """
-        if not isinstance(self.tokenizer, (BertTokenizer, BertTokenizerFast)):
-            warnings.warn(
-                "DataCollatorForWholeWordMask is only suitable for BertTokenizer-like tokenizers. "
-                "Please refer to the documentation for more information."
-            )
-
-        cand_indexes = []
-        words = []  # === Reconstruct words to give to scoring function
-        for i, token in enumerate(input_tokens):
-            if token == "[CLS]" or token == "[SEP]":
-                continue
-
-            if len(cand_indexes) >= 1 and token.startswith("##"):
-                cand_indexes[-1].append(i)
-                words[-1] += token[2:]  # ===
-            else:
-                cand_indexes.append([i])
-                words.append(token)  # ===
-
-        # Instead of randomly shuffling, sample n times an element according to its weight
-        # Basically it randomly sort the elements according to their probability
-        # =================
-        idx_cand_indexes = self.rng.choice(
-            range(len(cand_indexes)), len(cand_indexes),
-            replace=False, p=self.score_token(words)
-        )
-        cand_indexes = [cand_indexes[i] for i in idx_cand_indexes]
-        # ==================
-
-        num_to_predict = min(max_predictions, max(1, int(round(len(input_tokens) * self.mlm_probability))))
-        masked_lms = []
-        covered_indexes = set()
-        for index_set in cand_indexes:
-            if len(masked_lms) >= num_to_predict:
-                break
-            # If adding a whole-word mask would exceed the maximum number of
-            # predictions, then just skip this candidate.
-            if len(masked_lms) + len(index_set) > num_to_predict:
-                continue
-            is_any_index_covered = False
-            for index in index_set:
-                if index in covered_indexes:
-                    is_any_index_covered = True
-                    break
-            if is_any_index_covered:
-                continue
-            for index in index_set:
-                covered_indexes.add(index)
-                masked_lms.append(index)
-
-        if len(covered_indexes) != len(masked_lms):
-            raise ValueError("Length of covered_indexes is not equal to length of masked_lms.")
-        mask_labels = [1 if i in covered_indexes else 0 for i in range(len(input_tokens))]
-        return mask_labels
-
-
-@dataclass
 class DataCollatorForTermSpecificMasking(DataCollatorForWholeWordMask):
     """
     Data collator used for language modeling that masks entire words according to word probabilties stored in
@@ -233,8 +167,14 @@ class DataCollatorForTermSpecificMasking(DataCollatorForWholeWordMask):
                 words.append(token)  # ===
 
         # =================
-        # Instead of randomly shuffling, sample n times an element according to its weight
-        # Basically it randomly sort the elements according to their probability
+        # Instead of randomly shuffling the elements, sample n times an element according to its importance score
+        # Basically it randomly order the elements according to their probability
+
+        # Softmax over the importance scores
+        sum_ = sum(word_importance_scores)
+        word_importance_scores = [s/sum_ for s in word_importance_scores]
+
+        # Sample the elements
         idx_cand_indexes = self.rng.choice(
             range(len(cand_indexes)), len(cand_indexes),
             replace=False, p=word_importance_scores
