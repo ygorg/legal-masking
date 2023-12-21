@@ -12,16 +12,25 @@ def initialize_model_and_trainer(
     ):
 
     model = AutoModelForMaskedLM.from_pretrained(model_checkpoint)
-    device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        device = 'cuda'
+    elif torch.backends.mps.is_available():
+        # Macos
+        device = 'mps'
+    else:
+        device = 'cpu'
+    device = torch.device(device)
+
     logging.info("=========================================================")
     logging.info(f"Using device: {device}")
     model.to(device)
     logging_steps = len(tokenized_datasets["train"]) // batch_size
+    logging_steps = max(1, logging_steps)
 
     # Define training arguments
     training_args = TrainingArguments(
         output_dir=output_dir,  # Specify the output directory
-        evaluation_strategy="epoch",
+        # evaluation_strategy="epoch",
         num_train_epochs= num_epochs,
         learning_rate=2e-5,
         weight_decay=0.01,
@@ -31,6 +40,7 @@ def initialize_model_and_trainer(
         # fp16=True, # when we use cuda
         logging_steps=logging_steps,
         remove_unused_columns=False,  # In order to keep importance_weight column
+        use_mps_device=str(model.device).startswith('mps')  # For MacOS
     )
 
     # Initialize the Trainer
