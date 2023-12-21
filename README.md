@@ -27,6 +27,24 @@ model=PATH/TO/MODEL
 python -m legal_lama.run_experiments --model_name_or_path ${model} --vocab_constraint true
 ```
 
+```python
+# Scores to csv
+import re
+# It needs to be the 'ecthr_articles' output because it is the first it holds everything
+path_to_output = 'output/results_fair_eval/ecthr_articles/.._mask-bert_models_bert-base-uncased-e4-b16-tfidf-DEBUG1000_checkpoint-7500_constrained'
+with open(path_to_output + '/info.log') as f:
+    lines = [l.strip() for l in f if 'args' in l or 'global' in l]
+out = ""
+for l in lines:
+    m = re.search(r"dataset_filename='data/(.*).jsonl'", l)
+    if m:
+        out += m.group(1) + '\n'
+    else:
+        a, b = l.split(':')
+        out += f'{a}: {float(b)*100:2.2f}\n'
+print(re.subn(r'(\w+)\nglobal MRR: ([\d\.]+)\nglobal Precision at 1: ([\d\.]+)', r'\1;\2;\3', out)[0])
+```
+
 ## lex_glue
 ```bash
 # git clone https://github.com/coastalcph/lex-glue
