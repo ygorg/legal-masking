@@ -30,6 +30,7 @@ def initialize_model_and_trainer(
         push_to_hub=False,  # Set to False unless you also want to push to Hugging Face's Model Hub
         # fp16=True, # when we use cuda
         logging_steps=logging_steps,
+        remove_unused_columns=False,  # In order to keep importance_weight column
     )
 
     # Initialize the Trainer
