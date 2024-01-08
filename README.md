@@ -14,6 +14,40 @@ for c in ['canadian_crimes', 'canadian_sections', 'cjeu_terms', 'ecthr_terms', '
 ```
 ## Dataset Overview
 
+This project utilizes a subset of the LeXFiles, a groundbreaking English multinational legal corpus. The LeXFiles encompasses a comprehensive collection of legal texts, featuring approximately 19 billion tokens across 11 distinct sub-corpora. It covers legislation and case law from six major English-speaking legal systems: the European Union (EU), the Council of Europe (CoE), Canada, the United States (US), the United Kingdom (UK), and India.
+Objectives
+
+Our aim was to create a balanced representation of these legal systems while managing computational resources effectively. To this end, our training corpus, derived from the LeXFiles, includes carefully selected sub-corpora, emphasizing four legal systems:
+
+* European Union: EU Court Decisions
+* Council of Europe: ECtHR Decisions
+* India: Indian Court Decisions
+* United States: A representative corpus extracted from Kaggle, courtesy of Garrett Fiddler
+
+The final training corpus is approximately 4 GB, optimized for legal linguistic research and AI applications in the legal domain.
+Evaluation Strategy
+Masking Strategy Evaluation
+
+    Our evaluation employs a probing benchmark with 8 sub-tasks, designed to assess the depth of legal knowledge in Pretrained Language Models (PLMs).
+    This benchmark spans across all legal systems included in our training, providing a comprehensive evaluation of the PLMs.
+
+Legal Task Evaluation
+
+    We utilize the LexGLUE benchmark, a robust assessment based on seven existing legal NLP datasets. LexGLUE is modeled after the criteria used in SuperGLUE and focuses on European and US legal systems.
+    To extend our evaluation to the Indian legal system, we incorporated the LegalEval tasks, enriching our benchmark's scope.
+
+Installation and Setup
+
+[Provide detailed installation and setup instructions here, including any dependencies or requirements necessary to work with the corpus.]
+Usage
+
+[Explain how users can utilize the corpus in their research or AI applications, possibly with code snippets or example usage scenarios.]
+Credits
+
+[If applicable, acknowledge any collaborators, contributors, or sources of third-party assets.]
+License
+
+[Specify the licensing details for your project. Choose an appropriate license at choosealicense.com if necessary.]
 
 
 ## Continuous fine-tuning:
