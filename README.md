@@ -30,9 +30,11 @@ The final training corpus is approximately 4 GB, optimized for legal linguistic 
 
 ### Evaluation Strategy
 **Masking Strategy Evaluation**
+
 Our evaluation employs a probing benchmark with 8 sub-tasks, designed to assess the depth of legal knowledge in Pretrained Language Models (PLMs). This benchmark spans across all legal systems included in our training, providing a comprehensive evaluation of the PLMs.
 
 **Legal Task Evaluation**
+
 We utilize the LexGLUE benchmark, a robust assessment based on seven existing legal NLP datasets. LexGLUE is modeled after the criteria used in SuperGLUE and focuses on European and US legal systems. To extend our evaluation to the Indian legal system, we incorporated the LegalEval tasks, enriching our benchmark's scope.
 
 ### Installation and Setup
