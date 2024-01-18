@@ -1,30 +1,27 @@
 # data_collator_setup.py
 import logging
 
-from custom_data_collator import DataCollatorForTermSpecificMasking, tolist
-
+from custom_data_collator import DataCollatorForTermSpecificMasking,CustomDataCollatorForWholeWordMask, tolist
+from transformers import DataCollatorForWholeWordMask
 
 def initialize_data_collator(masking_strategies, strategy="default", collator_kwargs=None, score_kwargs=None):
     if strategy == 'default':
-        collator = DataCollatorForWholeWordMask(
+        tokenizer = collator_kwargs.get('tokenizer')
+	#print("default strategy")
+        # for adapt with BERT and RoBERTa models , be attention with Ygor code
+        collator =CustomDataCollatorForWholeWordMask(
             tokenizer=tokenizer,
             return_tensors="pt",
         )
         score_token = None
+        #logging.info("default strategy")
     else:
         collator = DataCollatorForTermSpecificMasking(
             return_tensors="pt",
             **collator_kwargs
         )
-        if strategy in ['term']:
-            if 'docs' in score_kwargs:
-                del score_kwargs['docs']
-        else:
-            if 'path' in score_kwargs:
-                del score_kwargs['path']
-        
-        score_token = masking_strategies[strategy](**score_kwargs)
-    return collator, score_token
+   
+    return collator
 
 def demonstrate_data_collator(data_collator, tokenized_datasets, tokenizer, num_examples=2):
     samples = [tokenized_datasets[i] for i in range(min(num_examples, len(tokenized_datasets)))]

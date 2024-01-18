@@ -1,11 +1,10 @@
-# data_setup.py
 import os
 import json
 import logging
 
 from datasets import Dataset
 
-def load_dataset(data_dir, num_examples=None):
+def load_custom_dataset(data_dir, num_examples=None):
 
     if num_examples is not None:
         logging.warning("Loading only {num_examples} examples, this is not expected for training/testing.")

@@ -30,12 +30,16 @@ def initialize_model_and_trainer(
     # Define training arguments
     training_args = TrainingArguments(
         output_dir=output_dir,  # Specify the output directory
-        # evaluation_strategy="epoch",
-        num_train_epochs= num_epochs,
+        evaluation_strategy="epoch",
+        save_strategy = "epoch",
+        save_total_limit = 1,
+	load_best_model_at_end = True,
+	num_train_epochs= num_epochs,
         learning_rate=2e-5,
         weight_decay=0.01,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
+	report_to="none",
         push_to_hub=False,  # Set to False unless you also want to push to Hugging Face's Model Hub
         # fp16=True, # when we use cuda
         logging_steps=logging_steps,

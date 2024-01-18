@@ -14,7 +14,7 @@ def tokenize_function(tokenizer, examples):
     return result
 
 
-def pretokenize_function(tokenizer, examples):
+def pretokenize_function_for_just_bert(tokenizer, examples):
     """Returns text tokenized on words and not subwords"""
     pretokenized = []
     for txt in examples['text']:
@@ -25,6 +25,31 @@ def pretokenize_function(tokenizer, examples):
     examples['pretokenized'] = pretokenized
     return examples
 
+def pretokenize_function(tokenizer, examples):
+    """Returns text tokenized on words and not subwords, adaptable for BERT and RoBERTa."""
+    pretokenized = []
+    tokenizer_type = type(tokenizer).__name__
+
+    for txt in examples['text']:
+        if tokenizer_type == "BertTokenizer":
+            # Pour BERT
+            txt = tokenizer.backend_tokenizer.normalizer.normalize_str(txt)
+            txt = tokenizer.backend_tokenizer.pre_tokenizer.pre_tokenize_str(txt)
+            txt = [t for t, off in txt]
+        elif tokenizer_type == "RobertaTokenizer":
+            # Pour RoBERTa
+            encoded_input = tokenizer.encode_plus(txt, add_special_tokens=False, return_offsets_mapping=True)
+            offsets = encoded_input['offset_mapping']
+            tokens = [txt[start:end] for (start, end) in offsets if start != end]
+            txt = tokens
+        else:
+            # Gestion par défaut
+            txt = tokenizer.tokenize(txt)
+
+        pretokenized.append(txt)
+
+    examples['pretokenized'] = pretokenized
+    return examples
 
 def group_texts(examples, chunk_size, split_importance_weights=True):
     # Process each example (document) individually
