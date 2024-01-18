@@ -1,9 +1,9 @@
 import os
 import logging
 import argparse
-
+import os
 from my_tokenize import initialize_tokenizer
-from data_setup import load_dataset
+from data_setup import load_custom_dataset
 from my_tokenize import tokenize_function, pretokenize_function, group_texts
 from data_collator_setup import (
     initialize_data_collator, create_tfidfscoring_function,
@@ -65,7 +65,7 @@ def main():
         parser = argparse.ArgumentParser(description="Run the model training and evaluation")
         parser.add_argument("--data-path", type=str, default="./data", help="Path to data (a directory containing {test, train, validation}.json (default: ./data)")
         parser.add_argument("--model-checkpoint", type=str, default="bert-base-uncased", help="Model name (or path) of huggingface model (default: bert-base-uncased)")
-        
+
         parser.add_argument("--batch-size", type=int, default=16, help="Training/Evaluation batch size (default: 16)")
         parser.add_argument("--num-epochs", type=int, default=3, help="Number of training epochs (default: 3)")
         parser.add_argument("--chunk-size", type=int, default=128, help="Split the documents into sequences of X tokens (default: 128)")
@@ -73,7 +73,7 @@ def main():
         parser.add_argument("--mask-strategy", type=str, choices=masking_strategies, default='default', help="Scoring function to use for masking tokens (default: default)")
         parser.add_argument("--term-path", type=str, default=None, help="Path to list of terms (one term per line)")
 
-        parser.add_argument("--cache-dir", type=str, default='./cache', help="Directory to cache pretreatments (default: './cache')")
+        parser.add_argument("--cache-dir", type=str, default=None, help="Directory to cache pretreatments (default: no cache)")
         parser.add_argument("--num-workers", type=int, default=1, help="Number of processes to use for pretreating data (default: 1)")
         parser.add_argument("--output-dir", type=str, default=None, help="Directory to save model's checkpoints (default: models/{model_name}-e{num_epochs}-b{batch_size}-{mask_strategy})")
         parser.add_argument("--num-example", type=int, default=None, help="Number of example to load (for debugging purposes) (default: all)")
@@ -87,13 +87,15 @@ def main():
     args = arguments()
 
     data_dir = args.data_path  # Specify your data directory
-    model_checkpoint = args.model_checkpoint
+    root_path = os.environ['DSDIR'] + '/HuggingFace_Models'
+    model_checkpoint = root_path+'/' + args.model_checkpoint
     # version = args.version
 
     num_epochs = args.num_epochs
     num_example = args.num_example
     mask_strategy = args.mask_strategy
     batch_size = args.batch_size
+
     term_path = args.term_path
     cache_dir = args.cache_dir
     num_workers = args.num_workers
@@ -115,11 +117,7 @@ def main():
         output_dir = args.output_dir
     else:
         model_name = model_checkpoint.split("/")[-1]
-        output_dir = f"../saved_models/{model_name}-e{num_epochs}-b{batch_size}-c{chunk_size}-{masking_strat_for_cache}"
-
-        if num_example:
-            output_dir += f"-DEBUG{num_example}"
-
+        output_dir = f"../saved_models/{model_name}-e{num_epochs}-b{batch_size}-c{chunk_size}-{masking_strat_for_cache}-ex{num_example if num_example else 'all'}"
 
     stream_handler = logging.StreamHandler()
     stream_handler.setLevel(logging.INFO)
@@ -136,7 +134,7 @@ def main():
     # =================================================================
     # Pre processing data
     # =================================================================
-    datasets = load_dataset(data_dir, num_example)
+    datasets = load_custom_dataset(data_dir, num_example)
 
     tokenizer = initialize_tokenizer(model_checkpoint=model_checkpoint)
 
@@ -243,6 +241,7 @@ def main():
             ),
             batched=True,
             cache_file_name=cache_fn_word_import_split[split]
+            num_proc=num_workers
         )
         logging.info(f'Cacheing to {cache_fn_word_import_split[split]}')
 

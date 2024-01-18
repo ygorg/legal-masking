@@ -6,16 +6,13 @@ from transformers import DataCollatorForWholeWordMask
 from custom_data_collator import DataCollatorForTermSpecificMasking, tolist
 
 
-def initialize_data_collator(
-        strategy, tokenizer, score_column,
-        ):
+def initialize_data_collator(strategy, tokenizer, score_column):
     if strategy in ['tfidf', 'idf', 'terms']:
         collator = DataCollatorForTermSpecificMasking(
             tokenizer=tokenizer,
             return_tensors="pt",
             score_column=score_column
         )
-
     else:
         collator = DataCollatorForWholeWordMask(
             tokenizer=tokenizer,
