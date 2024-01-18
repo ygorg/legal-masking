@@ -1,3 +1,4 @@
+import os
 import logging
 import argparse
 
@@ -26,6 +27,8 @@ def main():
         # parser.add_argument("--version", type=int, default=1, help="Model version (Default: 1)")
         parser.add_argument("--output-dir", type=str, default=None, help="Directory to save model's checkpoints (default: models/{model_name}-e{num_epochs}-b{batch_size}-{mask_strategy})")
         parser.add_argument("--num-example", type=int, default=None, help="Number of example to load (for debugging purposes) (default: all)")
+        parser.add_argument("--cache-dir", type=str, default='./cache', help="Directory to cache pretreatments (default: './cache')")
+        parser.add_argument("--chunk-size", type=int, default=128, help="Split the documents into sequences of X tokens (default: 128)")
 
         # parser.add_argument("--logging_steps", type=int, default=50, help="Logging steps")
         # 
@@ -43,14 +46,26 @@ def main():
     num_example = args.num_example
     mask_strategy = args.mask_strategy
     batch_size = args.batch_size
+    term_path = args.term_path
+    cache_dir = args.cache_dir
+    if mask_strategy != 'term':
+        term_path = None
+    if mask_strategy == 'term' and term_path == None:
+        raise Exception('Masking strategy is "term" but not term list provided. Please provide a file to --term-path.')
 
-    chunk_size = 128  # Split the documents every CHUNK_SIZE tokens
+    chunk_size = args.chunk_size  # Split the documents every CHUNK_SIZE tokens
+
+
+    masking_strat_for_cache = f'{mask_strategy}'
+    if term_path is not None:
+        masking_strat_for_cache += '-' + os.path.basename('.'.join(term_path.split('.')[:-1]))
 
     if args.output_dir:
         output_dir = args.output_dir
     else:
         model_name = model_checkpoint.split("/")[-1]
-        output_dir = f"models/{model_name}-e{num_epochs}-b{batch_size}-{mask_strategy}"
+        output_dir = f"models/{model_name}-e{num_epochs}-b{batch_size}-c{chunk_size}-{masking_strat_for_cache}"
+
         if num_example:
             output_dir += f"-DEBUG{num_example}"
 
@@ -73,16 +88,24 @@ def main():
     datasets = load_dataset(data_dir, num_example)
 
     tokenizer = initialize_tokenizer(model_checkpoint=model_checkpoint)
-    
-    logging.info("====================================================================")
-    logging.info("Pre-Tokenizing")
 
-    # Pretokenize documents for training the masking strategy
-    pre_tokenized_documents = datasets['train'].map(
-        lambda examples: pretokenize_function(tokenizer, examples),
-        batched=True,
-        remove_columns=['text', 'sector', 'descriptor', 'year', '__index_level_0__']
-    )
+    os.makedirs(cache_dir, exist_ok=True)
+    cache_fn_pretokenize = os.path.join(cache_dir, 'train-pretokenized.arrow')
+    if num_example:
+        cache_fn_pretokenize += f'-DEBUG{num_example}'
+    cache_fn_tokenize = {}
+    cache_fn_word_import = {}
+    cache_fn_word_import_split = {}
+    for split in datasets.keys():
+        cache_fn_tokenize[split] = os.path.join(cache_dir, f'{split}-tokenized.arrow')
+        cache_fn_word_import[split] = os.path.join(cache_dir, f'{split}-{masking_strat_for_cache}-word_importance.arrow')
+        cache_fn_word_import_split[split] = os.path.join(cache_dir, f'{split}-{masking_strat_for_cache}-{chunk_size}-word_importance_splitted.arrow')
+        if num_example:
+            cache_fn_tokenize[split] += f'-DEBUG{num_example}'
+            cache_fn_word_import[split] += f'-DEBUG{num_example}'
+            cache_fn_word_import_split[split] += f'-DEBUG{num_example}'
+
+
 
     logging.info("====================================================================")
     logging.info(f"Initialize data collator strategy ({mask_strategy})")
@@ -100,8 +123,10 @@ def main():
         tokenized_datasets[split] = dataset.map(
             lambda examples: tokenize_function(tokenizer, examples),
             batched=True,
-            remove_columns=['id', 'text', 'sector', 'descriptor', 'year', '__index_level_0__']
+            remove_columns=['id', 'text', 'sector', 'descriptor', 'year', '__index_level_0__'],
+            cache_file_name=cache_fn_tokenize[split],
         )
+        logging.info(f'Cacheing to {cache_fn_tokenize[split]}')
 
 
     # =================================================================
@@ -109,7 +134,23 @@ def main():
     # =================================================================
 
 
-    if mask_strategy != 'default':
+    if mask_strategy != 'default' and not all(os.path.exists(fn) for fn in cache_fn_word_import.values()):
+
+        logging.info("====================================================================")
+        logging.info("Pre-Tokenizing")
+
+        # Pretokenize documents for training the masking strategy because
+        #  we operate on whole words
+        pre_tokenized_documents = datasets['train'].map(
+            lambda examples: pretokenize_function(tokenizer, examples),
+            remove_columns=['text', 'sector', 'descriptor', 'year', '__index_level_0__'],
+            cache_file_name=cache_fn_pretokenize,
+            batched=True,
+            num_proc=4,
+            batch_size=10000
+        )
+        logging.info(f'Cacheing to {cache_fn_pretokenize}')
+
         def doc_generator(dataset, batch_size=10000):
             # HG datasets are always on the hard drive, and are in memory
             #  on the fly. For training tf-idf we use SKlearn, in order to
@@ -159,12 +200,15 @@ def main():
 
         # Compute words masking weights (stored in 'importance_weights')
         for split in tokenized_datasets.keys():
+
             tokenized_datasets[split] = tokenized_datasets[split].map(
                 lambda examples: apply_to_batch(compute_token_importance, examples, kwargs_fct={'tokenizer': tokenizer, 'score_token': score_token}),
                 batched=True,
                 batch_size=10000,
                 num_proc=4,
+                cache_file_name=cache_fn_word_import[split]
             )
+            logging.info(f'Cacheing to {cache_fn_word_import[split]}')
 
 
     # =================================================================
@@ -178,7 +222,9 @@ def main():
                 examples, chunk_size, split_importance_weights=mask_strategy != 'default'
             ),
             batched=True,
+            cache_file_name=cache_fn_word_import_split[split]
         )
+        logging.info(f'Cacheing to {cache_fn_word_import_split[split]}')
 
     demonstrate_data_collator(
         data_collator, tokenized_datasets['train'],
