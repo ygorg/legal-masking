@@ -147,8 +147,8 @@ def main():
         os.makedirs(f"{cache_dir}/tokenization-split", exist_ok=True)
 
         # Defining all cache file_name in order to check whether something was already done
-        cache_fn_pretokenize = f"{cache_dir}/pre-tokenization/{model_name}-ex{num_example if num_example else 'all'}-Train.arrow"
-        cache_fn_tfidf = f"{cache_dir}/tfidf/{model_name}-ex{num_example if num_example else 'all'}-Train.joblib"
+        cache_fn_pretokenize = f"{cache_dir}/pre-tokenization/{model_name}-ex{num_example if num_example else 'all'}-train.arrow"
+        cache_fn_tfidf = f"{cache_dir}/tfidf/{model_name}-ex{num_example if num_example else 'all'}-train.joblib"
         cache_fn_tokenize = {}
         cache_fn_word_import = {}
         cache_fn_word_import_split = {}
