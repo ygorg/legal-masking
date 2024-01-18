@@ -110,16 +110,60 @@ def main():
 
 
     if mask_strategy != 'default':
+        def doc_generator(dataset, batch_size=10000):
+            # HG datasets are always on the hard drive, and are in memory
+            #  on the fly. For training tf-idf we use SKlearn, in order to
+            #  pass the documents to Sklearn just writing
+            #  `pre_tokenized_documents['pretokenized']` loads all the
+            #  documents in the RAM.
+            # This function acts as a buffer for loading only 10000
+            #  documents at a time.
+            dataset_ = dataset.to_iterable_dataset().iter(batch_size)
+            for i, batch in enumerate(dataset_):
+                logging.info(f'Loaded {batch_size * i} documents of {len(dataset)}')
+                for doc in batch['pretokenized']:
+                    yield doc
+
         score_token = initialize_scoring_function(
             mask_strategy, doc_generator(pre_tokenized_documents), term_path
         )
+
         logging.info("====================================================================")
         logging.info("Compute importance weights according to masking strategy")
+
+        def apply_to_batch(fct, batch, kwargs_fct={}):
+            """Apply a function that deals with only one example
+            to a batch
+            
+            Args:
+                fct (Callable[dict[str, Any] -> dict[str, Any]]): takes a row of a datasets.Dataset and returns a new row
+                batch (dict[str, list[Any]]): a batch of examples
+                kwargs_fct (dict[str, Any]): arguments for `fct`
+            Returns:
+                dict[str, list[Any]] a processed batch of rows from a datasets.Dataset
+
+            """
+            doc = {k: batch[k][0] for k in batch}
+            new_doc = fct(doc, **kwargs_fct)
+
+            new_batch = {k: [v] for k, v in new_doc.items()}
+
+            batch_len = len(batch[list(batch.keys())[0]])
+            for i in range(1, batch_len):
+                doc = {k: batch[k][i] for k in batch}
+                new_doc = fct(doc, **kwargs_fct)
+                for k, v in new_doc.items():
+                    new_batch[k].append(v)
+
+            return new_batch
+
         # Compute words masking weights (stored in 'importance_weights')
         for split in tokenized_datasets.keys():
             tokenized_datasets[split] = tokenized_datasets[split].map(
-                lambda example: compute_token_importance(example, tokenizer, score_token),
-                batched=False,
+                lambda examples: apply_to_batch(compute_token_importance, examples, kwargs_fct={'tokenizer': tokenizer, 'score_token': score_token}),
+                batched=True,
+                batch_size=10000,
+                num_proc=4,
             )
 
 
