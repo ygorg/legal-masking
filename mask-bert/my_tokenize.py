@@ -1,4 +1,5 @@
 # my_tokenize.py
+import logging
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 
 
@@ -17,10 +18,13 @@ def tokenize_function(tokenizer, examples):
 def pretokenize_function(tokenizer, examples):
     """Returns text tokenized on words and not subwords"""
     pretokenized = []
+    if isinstance(examples['text'], str):
+        logging.error('pretokenize_function should be batched')
+        exit()
     for txt in examples['text']:
         txt = tokenizer.backend_tokenizer.normalizer.normalize_str(txt)
         txt = tokenizer.backend_tokenizer.pre_tokenizer.pre_tokenize_str(txt)
-        txt = [t for t, off in txt]
+        txt = [t for t, _ in txt]
         pretokenized.append(txt)
     examples['pretokenized'] = pretokenized
     return examples

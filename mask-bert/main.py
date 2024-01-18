@@ -4,14 +4,12 @@ import argparse
 from my_tokenize import initialize_tokenizer
 from data_setup import load_dataset
 from my_tokenize import tokenize_function, pretokenize_function, group_texts
-from data_collator_setup import initialize_data_collator, demonstrate_data_collator, compute_token_importance
+from data_collator_setup import initialize_data_collator, initialize_scoring_function, demonstrate_data_collator, compute_token_importance
 from model_trainer import initialize_model_and_trainer, downsample_dataset, train_and_evaluate
-from data_collator_setup import create_tfidfscoring_function, create_idfscoring_function, create_termscoring_function
 
-masking_strategies = {
-    'tfidf': create_tfidfscoring_function,
-    'idf': create_idfscoring_function,
-    'term': create_termscoring_function,
+masking_strategies = [
+    'tfidf', 'idf', 'term', 'default'
+]
     'default': None,
 }
 
@@ -88,17 +86,16 @@ def main():
     )
 
     logging.info("====================================================================")
-    logging.info("Train masking strategy (example: compute TfIdf on whole documents)")
+    logging.info(f"Initialize data collator strategy ({mask_strategy})")
     # Initialize and demonstrate Data Collator
-    data_collator, score_token = initialize_data_collator(
-        masking_strategies,
-        strategy=mask_strategy,
-        collator_kwargs={'tokenizer': tokenizer, 'score_column': 'importance_weight'},
-        score_kwargs={'docs': pre_tokenized_documents['pretokenized'], 'path': 'path/to/terms'}
+
+    data_collator = initialize_data_collator(
+        mask_strategy, tokenizer, 'importance_weight',
     )
 
     logging.info("====================================================================")
-    logging.info("Tokenizing")
+    logging.info(f"Tokenizing")
+
     tokenized_datasets = {}
     for split, dataset in datasets.items():
         tokenized_datasets[split] = dataset.map(

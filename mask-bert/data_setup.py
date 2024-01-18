@@ -8,7 +8,7 @@ from datasets import Dataset
 def load_dataset(data_dir, num_examples=None):
 
     if num_examples is not None:
-        logging.warning("Loading only {num_examples} examples, this is not expected for training/testing.")
+        logging.warning(f"Loading only {num_examples} examples, this is not expected for training/testing.")
 
     # ... [Existing function code remains unchanged]
     def load_dataset_from_json(file_path):

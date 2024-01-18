@@ -1,6 +1,7 @@
 # data_collator_setup.py
 import logging
 
+from transformers import DataCollatorForWholeWordMask
 from custom_data_collator import DataCollatorForTermSpecificMasking, tolist
 
 
@@ -52,6 +53,21 @@ def demonstrate_data_collator(data_collator, tokenized_datasets, tokenizer, num_
 
 
 def compute_token_importance(example, tokenizer, score_token):
+    """Computes importance score of words in a document.
+    
+    This function should be use in a `datasets.Dataset.map`. This
+    function does what is done in the data collator. But for this
+    experiment we need to precompute the importance scores.
+    
+    Args:
+        example (dict): a row of a huggingface Dataset
+        tokenizer (tokenizers.Tokenizer): tokenizer used to tokenize the example
+        score_token (Callable[list(words) -> list(scores)]): a function that returns a score for every word in the example
+    
+    Returns:
+        dict: the new row of the dataset
+    """
+
     # From DataCollator.pytorch_call
     ref_tokens = []
     for id in tolist(example["input_ids"]):
@@ -114,7 +130,7 @@ def create_idfscoring_function(docs, epsilon=0.00001):
     # Compute tfidf from given documents
     from sklearn.feature_extraction.text import TfidfVectorizer
     tfidf = TfidfVectorizer(analyzer=lambda x: x)
-    _ = tfidf.fit(docs)
+    tfidf.fit(docs)
 
     # Create word-IDF mapping
     idf_dict = {k: v for k, v in zip(
@@ -145,7 +161,7 @@ def create_termscoring_function(path, epsilon=0.1):
     # Load stopwords
     import json
     from nltk.corpus import stopwords
-    sw = [w.strip().lower() for w in stopwords.words('english')]
+    stop_words = [w.strip().lower() for w in stopwords.words('english')]
 
     # Load terms
     with open(path) as f:
@@ -153,7 +169,12 @@ def create_termscoring_function(path, epsilon=0.1):
 
     # Convert multi-word terms to single words without stopwords
     # (['abandoned property', ...] to ['abandoned', 'property', ...])
-    legal_words = set([w.strip().lower() for t in legal_terms for w in t.split(' ') if w and w not in sw])
+    legal_words = set([
+        word.strip().lower()
+        for term in legal_terms
+        for word in term.split(' ')
+        if word and word not in stop_words
+    ])
 
     # Create actual scoring function that uses the loaded list of words
     def score_lawterms(words, normalize=True):
