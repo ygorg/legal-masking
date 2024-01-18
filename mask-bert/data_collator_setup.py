@@ -88,8 +88,9 @@ def fit_or_load_tfidf(docs, cache_file):
     else:
         tfidf = TfidfVectorizer(analyzer=no_tokenize)
         tfidf.fit(docs)
-        dump(tfidf, cache_file)
-        logging.info(f"Cacheing Tfidf to {cache_file}")
+        if cache_file:
+            dump(tfidf, cache_file)
+            logging.info(f"Cacheing Tfidf to {cache_file}")
     logging.info(f"Tfidf vocabulary size : {len(tfidf.get_feature_names_out())}")
     return tfidf
 
