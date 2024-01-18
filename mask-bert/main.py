@@ -10,8 +10,6 @@ from model_trainer import initialize_model_and_trainer, downsample_dataset, trai
 masking_strategies = [
     'tfidf', 'idf', 'term', 'default'
 ]
-    'default': None,
-}
 
 def main():
 
@@ -21,12 +19,13 @@ def main():
         parser = argparse.ArgumentParser(description="Run the model training and evaluation")
         parser.add_argument("--data-path", type=str, default="./data", help="Path to data (a directory containing {test, train, validation}.json (default: ./data)")
         parser.add_argument("--model-checkpoint", type=str, default="bert-base-uncased", help="Model name (or path) of huggingface model (default: bert-base-uncased)")
-        parser.add_argument("--batch-size", type=int, default=16, help="Training/Evaluation batch size (Default: 16)")
-        parser.add_argument("--num-epochs", type=int, default=3, help="Number of training epochs (Default: 3)")
-        parser.add_argument("--mask-strategy", type=str, choices=masking_strategies, default=None, help="Scoring function to use for masking tokens (Default: None)")
+        parser.add_argument("--batch-size", type=int, default=16, help="Training/Evaluation batch size (default: 16)")
+        parser.add_argument("--num-epochs", type=int, default=3, help="Number of training epochs (default: 3)")
+        parser.add_argument("--mask-strategy", type=str, choices=masking_strategies, default='default', help="Scoring function to use for masking tokens (default: default)")
+        parser.add_argument("--term-path", type=str, default=None, help="Path to list of terms (one term per line)")
         # parser.add_argument("--version", type=int, default=1, help="Model version (Default: 1)")
-        parser.add_argument("--output-dir", type=str, default=None, help="(default: models/{model_checkpoint}-baseline-v{version})")
-        parser.add_argument("--num-example", type=int, default=None, help="Number of example to load (for debugging purposes) (default: None)")
+        parser.add_argument("--output-dir", type=str, default=None, help="Directory to save model's checkpoints (default: models/{model_name}-e{num_epochs}-b{batch_size}-{mask_strategy})")
+        parser.add_argument("--num-example", type=int, default=None, help="Number of example to load (for debugging purposes) (default: all)")
 
         # parser.add_argument("--logging_steps", type=int, default=50, help="Logging steps")
         # 

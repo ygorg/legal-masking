@@ -165,7 +165,7 @@ def create_termscoring_function(path, epsilon=0.1):
 
     # Load terms
     with open(path) as f:
-        legal_terms = json.load(f)
+        legal_terms = [l.strip() for l in f]
 
     # Convert multi-word terms to single words without stopwords
     # (['abandoned property', ...] to ['abandoned', 'property', ...])
