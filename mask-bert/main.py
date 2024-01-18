@@ -87,8 +87,7 @@ def main():
     args = arguments()
 
     data_dir = args.data_path  # Specify your data directory
-    root_path = os.environ['DSDIR'] + '/HuggingFace_Models'
-    model_checkpoint = root_path+'/' + args.model_checkpoint
+    model_checkpoint = args.model_checkpoint
     # version = args.version
 
     num_epochs = args.num_epochs
@@ -109,15 +108,15 @@ def main():
 
 
     # Name of the masking strategy with the name of the term used if any
-    masking_strat_for_cache = f'{mask_strategy}'
+    mask_strat_for_cache = f'{mask_strategy}'
     if term_path is not None:
-        masking_strat_for_cache += '_' + os.path.basename('.'.join(term_path.split('.')[:-1]))
+        mask_strat_for_cache += '_' + os.path.basename('.'.join(term_path.split('.')[:-1]))
 
     if args.output_dir:
         output_dir = args.output_dir
     else:
         model_name = model_checkpoint.split("/")[-1]
-        output_dir = f"../saved_models/{model_name}-e{num_epochs}-b{batch_size}-c{chunk_size}-{masking_strat_for_cache}-ex{num_example if num_example else 'all'}"
+        output_dir = f"../saved_models/{model_name}-e{num_epochs}-b{batch_size}-c{chunk_size}-{mask_strat_for_cache}-ex{num_example if num_example else 'all'}"
 
     stream_handler = logging.StreamHandler()
     stream_handler.setLevel(logging.INFO)
@@ -140,6 +139,11 @@ def main():
 
     # Making sure the cache directory exists
     os.makedirs(cache_dir, exist_ok=True)
+    os.makedirs(f"{cache_dir}/tokenization", exist_ok=True)
+    os.makedirs(f"{cache_dir}/pre-tokenization", exist_ok=True)
+    os.makedirs(f"{cache_dir}/tfidf", exist_ok=True)
+    os.makedirs(f"{cache_dir}/tokenization-strategy", exist_ok=True)
+    os.makedirs(f"{cache_dir}/tokenization-split", exist_ok=True)
 
     # Defining all cache file_name in order to check whether something was already done
     cache_fn_pretokenize = f"{cache_dir}/pre-tokenization/{model_name}-ex{num_example if num_example else 'all'}-Train.arrow"
@@ -148,9 +152,9 @@ def main():
     cache_fn_word_import = {}
     cache_fn_word_import_split = {}
     for split in datasets.keys():
-        cache_fn_tokenize[split] = f"{cache_dir}/tokenization/{model_name}-ex{num_example if num_example else 'all'}-{split}.arrow",
-        cache_fn_word_import[split] = f"{cache_dir}/tokenization-strategy/{model_name}-{masking_strat_for_cache}-ex{num_example if num_example else 'all'}-{split}.arrow",
-        cache_fn_word_import_split[split] = f"{cache_dir}/tokenization-split/{model_name}-{mask_strategy_for_cache}-c{chunk_size}-ex{num_example if num_example else 'all'}-{split}.arrow",
+        cache_fn_tokenize[split] = f"{cache_dir}/tokenization/{model_name}-ex{num_example if num_example else 'all'}-{split}.arrow"
+        cache_fn_word_import[split] = f"{cache_dir}/tokenization-strategy/{model_name}-{mask_strat_for_cache}-ex{num_example if num_example else 'all'}-{split}.arrow"
+        cache_fn_word_import_split[split] = f"{cache_dir}/tokenization-split/{model_name}-{mask_strat_for_cache}-c{chunk_size}-ex{num_example if num_example else 'all'}-{split}.arrow"
 
 
 
@@ -240,7 +244,7 @@ def main():
                 examples, chunk_size, split_importance_weights=mask_strategy != 'default'
             ),
             batched=True,
-            cache_file_name=cache_fn_word_import_split[split]
+            cache_file_name=cache_fn_word_import_split[split],
             num_proc=num_workers
         )
         logging.info(f'Cacheing to {cache_fn_word_import_split[split]}')

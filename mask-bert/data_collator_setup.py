@@ -78,13 +78,8 @@ def compute_token_importance(example, tokenizer, score_token):
 def no_tokenize(x):
     return x
 
-def create_tfidfscoring_function(docs, epsilon=0.00001, cache_file=None):
-    # TODO : how to smooth in a more inteligent way ?
-    # why is epsilon = 0.00001 ??
-
-    # Compute tfidf from given documents
+def fit_or_load_tfidf(docs, cache_file):
     from sklearn.feature_extraction.text import TfidfVectorizer
-
     from joblib import dump, load
 
     if cache_file is not None and os.path.exists(cache_file):
@@ -96,6 +91,14 @@ def create_tfidfscoring_function(docs, epsilon=0.00001, cache_file=None):
         dump(tfidf, cache_file)
         logging.info(f"Cacheing Tfidf to {cache_file}")
     logging.info(f"Tfidf vocabulary size : {len(tfidf.get_feature_names_out())}")
+    return tfidf
+
+def create_tfidfscoring_function(docs, epsilon=0.00001, cache_file=None):
+    # TODO : how to smooth in a more inteligent way ?
+    # why is epsilon = 0.00001 ??
+
+    # Compute tfidf from given documents
+    tfidf = fit_or_load_tfidf(docs, cache_file)
 
     # Create actual scoring function that uses the computed IDF mapping
     def score_tfidf(words, normalize=True):
@@ -115,23 +118,12 @@ def create_tfidfscoring_function(docs, epsilon=0.00001, cache_file=None):
     return score_tfidf
 
 
-def create_idfscoring_function(docs, epsilon=0.00001):
+def create_idfscoring_function(docs, epsilon=0.00001, cache_file=None):
     # TODO : how to smooth in a more inteligent way ?
     # why is epsilon = 0.00001 ??
 
     # Compute tfidf from given documents
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    from joblib import dump, load
-
-    if cache_file is not None and os.path.exists(cache_file):
-        tfidf = load(cache_file)
-        logging.info(f"Using cached Tfidf from {cache_file}")
-    else:
-        tfidf = TfidfVectorizer(analyzer=no_tokenize)
-        tfidf.fit(docs)
-        dump(tfidf, cache_file)
-        logging.info(f"Cacheing Tfidf to {cache_file}")
-    logging.info(f"Tfidf vocabulary size : {len(tfidf.get_feature_names_out())}")
+    tfidf = fit_or_load_tfidf(docs, cache_file)
 
     # Create word-IDF mapping
     idf_dict = {k: v for k, v in zip(
