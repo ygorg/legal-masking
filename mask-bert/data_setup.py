@@ -7,7 +7,7 @@ from datasets import Dataset
 def load_custom_dataset(data_dir, num_examples=None):
 
     if num_examples is not None:
-        logging.warning("Loading only {num_examples} examples, this is not expected for training/testing.")
+        logging.warning(f"Loading only {num_examples} examples, this is not expected for training/testing.")
 
     # ... [Existing function code remains unchanged]
     def load_dataset_from_json(file_path):
@@ -18,7 +18,11 @@ def load_custom_dataset(data_dir, num_examples=None):
             else:
                 data_list = []
                 for i in range(num_examples):
-                    data_list.append(json.loads(file.readline()))
+                    line = next(file, None)
+                    if line is None:
+                        break
+                    data_list.append(json.loads(line))
+
         data = {key: [dic[key] for dic in data_list] for key in data_list[0]}
         return Dataset.from_dict(data)
 

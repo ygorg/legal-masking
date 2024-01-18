@@ -1,4 +1,5 @@
 # my_tokenize.py
+import logging
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 
 
@@ -13,17 +14,6 @@ def tokenize_function(tokenizer, examples):
         result["word_ids"] = [result.word_ids(i) for i in range(len(result["input_ids"]))]
     return result
 
-
-def pretokenize_function_for_just_bert(tokenizer, examples):
-    """Returns text tokenized on words and not subwords"""
-    pretokenized = []
-    for txt in examples['text']:
-        txt = tokenizer.backend_tokenizer.normalizer.normalize_str(txt)
-        txt = tokenizer.backend_tokenizer.pre_tokenizer.pre_tokenize_str(txt)
-        txt = [t for t, off in txt]
-        pretokenized.append(txt)
-    examples['pretokenized'] = pretokenized
-    return examples
 
 def pretokenize_function(tokenizer, examples):
     """Returns text tokenized on words and not subwords, adaptable for BERT and RoBERTa."""
@@ -50,6 +40,7 @@ def pretokenize_function(tokenizer, examples):
 
     examples['pretokenized'] = pretokenized
     return examples
+
 
 def group_texts(examples, chunk_size, split_importance_weights=True):
     # Process each example (document) individually

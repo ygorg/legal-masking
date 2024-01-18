@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict, List, NewType, Optional, Tuple, Union, M
 from transformers import BertTokenizer, BertTokenizerFast, DataCollatorForWholeWordMask
 from transformers import RobertaTokenizer, RobertaTokenizerFast
 from transformers import XLMRobertaTokenizer, XLMRobertaTokenizerFast
+from transformers import HerbertTokenizer, HerbertTokenizerFast
 
 
 def _torch_collate_batch(examples, tokenizer, pad_to_multiple_of: Optional[int] = None):
@@ -123,93 +124,6 @@ def tolist(x):
     return x.tolist()
 
 
-
-
-
-
-@dataclass
-class CustomDataCollatorForWholeWordMask(DataCollatorForWholeWordMask):
-    # def __init__(self, tokenizer, mlm_probability=0.15):
-    #     super().__init__(tokenizer=tokenizer, mlm_probability=mlm_probability)
-
-     def _whole_word_mask(self, input_tokens: List[str], max_predictions=512):
-        """
-        Get 0/1 labels for masked tokens with whole word mask proxy
-        """
-        #if not isinstance(self.tokenizer, (BertTokenizer, BertTokenizerFast,
-        #                                   RobertaTokenizer, RobertaTokenizerFast,
-        #                                   XLMRobertaTokenizer, XLMRobertaTokenizerFast,
-        #                                   HerbertTokenizer, HerbertTokenizerFast)):
-        #    warnings.warn(
-        #        "DataCollatorForWholeWordMask is only suitable for BertTokenizer or RobertaTokenizer-like tokenizers. "
-        #        "Please refer to the documentation for more information."
-        #    )
-
-        cand_indexes = []
-        special_tokens = [val for key, val in self.tokenizer.special_tokens_map.items()
-                          if key not in ['unk_token', 'mask_token']]
-        is_bert_tokenizer = isinstance(self.tokenizer, (BertTokenizer, BertTokenizerFast))
-        is_roberta_tokenizer = isinstance(self.tokenizer, (RobertaTokenizer, RobertaTokenizerFast))
-        is_xlm_roberta_tokenizer = isinstance(self.tokenizer, (XLMRobertaTokenizer, XLMRobertaTokenizerFast))
-        for (i, token) in enumerate(input_tokens):
-            if token in special_tokens:
-                continue
-
-            if is_bert_tokenizer:
-                if len(cand_indexes) >= 1 and token.startswith("##"):
-                    cand_indexes[-1].append(i)
-                else:
-                    cand_indexes.append([i])
-            elif is_roberta_tokenizer:
-                # If a token doesn't start with Ġ, it's part of the previous token
-                if len(cand_indexes) >= 1 and not token.startswith("Ġ"):
-                    cand_indexes[-1].append(i)
-                else:
-                    cand_indexes.append([i])
-            elif is_xlm_roberta_tokenizer:
-                # If a token doesn't start with ▁, it's part of the previous token
-                if len(cand_indexes) >= 1 and not token.startswith("▁"):
-                    cand_indexes[-1].append(i)
-                else:
-                    cand_indexes.append([i])
-            else:
-                raise ValueError("Whole-word masking only implemented for BERT/RoBERTa/XLM-Roberta so far")
-
-        if len(cand_indexes[-1]) == 0:
-            cand_indexes = cand_indexes[:-1]
-
-        random.shuffle(cand_indexes)
-        num_to_predict = min(max_predictions, max(1, int(round(len(input_tokens) * self.mlm_probability))))
-        masked_lms = []
-        covered_indexes = set()
-        for index_set in cand_indexes:
-            if len(masked_lms) >= num_to_predict:
-                break
-            # If adding a whole-word mask would exceed the maximum number of
-            # predictions, then just skip this candidate.
-            if len(masked_lms) + len(index_set) > num_to_predict:
-                continue
-            is_any_index_covered = False
-            for index in index_set:
-                if index in covered_indexes:
-                    is_any_index_covered = True
-                    break
-            if is_any_index_covered:
-                continue
-            for index in index_set:
-                covered_indexes.add(index)
-                masked_lms.append(index)
-
-        if len(covered_indexes) != len(masked_lms):
-            raise ValueError("Length of covered_indexes is not equal to length of masked_lms.")
-        mask_labels = [1 if i in covered_indexes else 0 for i in range(len(input_tokens))]
-        return mask_labels
-
-
-
-
-
-
 @dataclass
 class DataCollatorForTermSpecificMasking(DataCollatorForWholeWordMask):
     """
@@ -237,24 +151,56 @@ class DataCollatorForTermSpecificMasking(DataCollatorForWholeWordMask):
         """
         Get 0/1 labels for masked tokens with whole word mask proxy
         """
-        if not isinstance(self.tokenizer, (BertTokenizer, BertTokenizerFast)):
+        if not isinstance(self.tokenizer, (BertTokenizer, BertTokenizerFast,
+                                           RobertaTokenizer, RobertaTokenizerFast,
+                                           XLMRobertaTokenizer, XLMRobertaTokenizerFast,
+                                           HerbertTokenizer, HerbertTokenizerFast)):
             warnings.warn(
-                "DataCollatorForWholeWordMask is only suitable for BertTokenizer-like tokenizers. "
+                "DataCollatorForWholeWordMask is only suitable for BertTokenizer or RobertaTokenizer-like tokenizers. "
                 "Please refer to the documentation for more information."
             )
 
         cand_indexes = []
         words = []  # === Reconstruct words to give to scoring function
+
+        special_tokens = [val for key, val in self.tokenizer.special_tokens_map.items()
+                          if key not in ['unk_token', 'mask_token']]
+        is_bert_tokenizer = isinstance(self.tokenizer, (BertTokenizer, BertTokenizerFast))
+        is_roberta_tokenizer = isinstance(self.tokenizer, (RobertaTokenizer, RobertaTokenizerFast))
+        is_xlm_roberta_tokenizer = isinstance(self.tokenizer, (XLMRobertaTokenizer, XLMRobertaTokenizerFast))
         for i, token in enumerate(input_tokens):
-            if token == "[CLS]" or token == "[SEP]":
+            if token in special_tokens:
                 continue
 
-            if len(cand_indexes) >= 1 and token.startswith("##"):
-                cand_indexes[-1].append(i)
-                words[-1] += token[2:]  # ===
+
+            if is_bert_tokenizer:
+                if len(cand_indexes) >= 1 and token.startswith("##"):
+                    cand_indexes[-1].append(i)
+                    words[-1] += token[2:]  # ===
+                else:
+                    cand_indexes.append([i])
+                    words.append(token)  # ===
+            elif is_roberta_tokenizer:
+                # If a token doesn't start with Ġ, it's part of the previous token
+                if len(cand_indexes) >= 1 and not token.startswith("Ġ"):
+                    cand_indexes[-1].append(i)
+                    words[-1] += token[1:]  # ===
+                else:
+                    cand_indexes.append([i])
+                    words.append(token)  # ===
+            elif is_xlm_roberta_tokenizer:
+                # If a token doesn't start with ▁, it's part of the previous token
+                if len(cand_indexes) >= 1 and not token.startswith("▁"):
+                    cand_indexes[-1].append(i)
+                    words[-1] += token[1:]  # ===
+                else:
+                    cand_indexes.append([i])
+                    words.append(token)  # ===
             else:
-                cand_indexes.append([i])
-                words.append(token)  # ===
+                raise ValueError("Whole-word masking only implemented for BERT/RoBERTa/XLM-Roberta so far")
+
+        if len(cand_indexes[-1]) == 0:
+            cand_indexes = cand_indexes[:-1]
 
         # =================
         # Instead of randomly shuffling the elements, sample n times an element according to its importance score

@@ -1,27 +1,25 @@
 # data_collator_setup.py
+import os
 import logging
 
-from custom_data_collator import DataCollatorForTermSpecificMasking,CustomDataCollatorForWholeWordMask, tolist
 from transformers import DataCollatorForWholeWordMask
+from custom_data_collator import DataCollatorForTermSpecificMasking, tolist
 
-def initialize_data_collator(masking_strategies, strategy="default", collator_kwargs=None, score_kwargs=None):
-    if strategy == 'default':
-        tokenizer = collator_kwargs.get('tokenizer')
-	#print("default strategy")
-        # for adapt with BERT and RoBERTa models , be attention with Ygor code
-        collator =CustomDataCollatorForWholeWordMask(
+
+def initialize_data_collator(strategy, tokenizer, score_column):
+    if strategy in ['tfidf', 'idf', 'terms']:
+        collator = DataCollatorForTermSpecificMasking(
+            tokenizer=tokenizer,
+            return_tensors="pt",
+            score_column=score_column
+        )
+    else:
+        collator = DataCollatorForWholeWordMask(
             tokenizer=tokenizer,
             return_tensors="pt",
         )
-        score_token = None
-        #logging.info("default strategy")
-    else:
-        collator = DataCollatorForTermSpecificMasking(
-            return_tensors="pt",
-            **collator_kwargs
-        )
-   
     return collator
+
 
 def demonstrate_data_collator(data_collator, tokenized_datasets, tokenizer, num_examples=2):
     samples = [tokenized_datasets[i] for i in range(min(num_examples, len(tokenized_datasets)))]
@@ -37,6 +35,21 @@ def demonstrate_data_collator(data_collator, tokenized_datasets, tokenizer, num_
 
 
 def compute_token_importance(example, tokenizer, score_token):
+    """Computes importance score of words in a document.
+    
+    This function should be use in a `datasets.Dataset.map`. This
+    function does what is done in the data collator. But for this
+    experiment we need to precompute the importance scores.
+    
+    Args:
+        example (dict): a row of a huggingface Dataset
+        tokenizer (tokenizers.Tokenizer): tokenizer used to tokenize the example
+        score_token (Callable[list(words) -> list(scores)]): a function that returns a score for every word in the example
+    
+    Returns:
+        dict: the new row of the dataset
+    """
+
     # From DataCollator.pytorch_call
     ref_tokens = []
     for id in tolist(example["input_ids"]):
@@ -62,25 +75,38 @@ def compute_token_importance(example, tokenizer, score_token):
 
 
 #====
-def create_tfidfscoring_function(docs, epsilon=0.00001):
+def no_tokenize(x):
+    return x
+
+def fit_or_load_tfidf(docs, cache_file):
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from joblib import dump, load
+
+    if cache_file is not None and os.path.exists(cache_file):
+        tfidf = load(cache_file)
+        logging.info(f"Using cached Tfidf from {cache_file}")
+    else:
+        tfidf = TfidfVectorizer(analyzer=no_tokenize)
+        tfidf.fit(docs)
+        dump(tfidf, cache_file)
+        logging.info(f"Cacheing Tfidf to {cache_file}")
+    logging.info(f"Tfidf vocabulary size : {len(tfidf.get_feature_names_out())}")
+    return tfidf
+
+def create_tfidfscoring_function(docs, epsilon=0.00001, cache_file=None):
     # TODO : how to smooth in a more inteligent way ?
     # why is epsilon = 0.00001 ??
 
     # Compute tfidf from given documents
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    tfidf = TfidfVectorizer(analyzer=lambda x: x)
-    tfidf.fit(docs)
+    tfidf = fit_or_load_tfidf(docs, cache_file)
 
     # Create actual scoring function that uses the computed IDF mapping
     def score_tfidf(words, normalize=True):
         # Give a score to each word according to its TF-IDF in the corpus
+        scores = tfidf.transform([words]).toarray()[0]
 
-        # Create word-TfIdf mapping
-        tfidf_dict = {k: v for k, v in zip(
-            tfidf.get_feature_names_out(),
-            tfidf.transform([' '.join(words)]).toarray()[0]
-        ) if v > 0 }
-        weights = [tfidf_dict.get(w, epsilon) for w in words]
+        words_idx = [tfidf.vocabulary_.get(w, None) for w in words]
+        weights = [scores[i] if i is not None else epsilon for i in words_idx]
 
         # softmax
         if normalize:
@@ -92,14 +118,12 @@ def create_tfidfscoring_function(docs, epsilon=0.00001):
     return score_tfidf
 
 
-def create_idfscoring_function(docs, epsilon=0.00001):
+def create_idfscoring_function(docs, epsilon=0.00001, cache_file=None):
     # TODO : how to smooth in a more inteligent way ?
     # why is epsilon = 0.00001 ??
 
     # Compute tfidf from given documents
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    tfidf = TfidfVectorizer(analyzer=lambda x: x)
-    _ = tfidf.fit(docs)
+    tfidf = fit_or_load_tfidf(docs, cache_file)
 
     # Create word-IDF mapping
     idf_dict = {k: v for k, v in zip(
@@ -130,15 +154,20 @@ def create_termscoring_function(path, epsilon=0.1):
     # Load stopwords
     import json
     from nltk.corpus import stopwords
-    sw = [w.strip().lower() for w in stopwords.words('english')]
+    stop_words = [w.strip().lower() for w in stopwords.words('english')]
 
     # Load terms
     with open(path) as f:
-        legal_terms = json.load(f)
+        legal_terms = [l.strip() for l in f]
 
     # Convert multi-word terms to single words without stopwords
     # (['abandoned property', ...] to ['abandoned', 'property', ...])
-    legal_words = set([w.strip().lower() for t in legal_terms for w in t.split(' ') if w and w not in sw])
+    legal_words = set([
+        word.strip().lower()
+        for term in legal_terms
+        for word in term.split(' ')
+        if word and word not in stop_words
+    ])
 
     # Create actual scoring function that uses the loaded list of words
     def score_lawterms(words, normalize=True):
