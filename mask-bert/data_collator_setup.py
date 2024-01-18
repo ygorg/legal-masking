@@ -4,27 +4,39 @@ import logging
 from custom_data_collator import DataCollatorForTermSpecificMasking, tolist
 
 
-def initialize_data_collator(masking_strategies, strategy="default", collator_kwargs=None, score_kwargs=None):
-    if strategy == 'default':
+def initialize_data_collator(
+        strategy, tokenizer, score_column,
+        ):
+    if strategy in ['tfidf', 'idf', 'terms']:
+        collator = DataCollatorForTermSpecificMasking(
+            tokenizer=tokenizer,
+            return_tensors="pt",
+            score_column=score_column
+        )
+
+    else:
         collator = DataCollatorForWholeWordMask(
             tokenizer=tokenizer,
             return_tensors="pt",
         )
-        score_token = None
+    return collator
+
+
+def initialize_scoring_function(strategy, docs, path):
+    if strategy == 'tfidf':
+        logging.info(f"Fitting tf-idf matrix")
+        score_token = create_tfidfscoring_function(docs)
+    elif strategy == 'idf':
+        logging.info(f"Computing idf matrix")
+        score_token = create_idfscoring_function(docs)
+    elif strategy == 'term':
+        logging.info(f"Loading terms from {path}")
+        score_token = create_termscoring_function(path)
     else:
-        collator = DataCollatorForTermSpecificMasking(
-            return_tensors="pt",
-            **collator_kwargs
-        )
-        if strategy in ['term']:
-            if 'docs' in score_kwargs:
-                del score_kwargs['docs']
-        else:
-            if 'path' in score_kwargs:
-                del score_kwargs['path']
-        
-        score_token = masking_strategies[strategy](**score_kwargs)
-    return collator, score_token
+        score_token = None
+
+    return score_token
+
 
 def demonstrate_data_collator(data_collator, tokenized_datasets, tokenizer, num_examples=2):
     samples = [tokenized_datasets[i] for i in range(min(num_examples, len(tokenized_datasets)))]

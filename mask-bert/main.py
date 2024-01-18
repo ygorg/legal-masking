@@ -114,6 +114,9 @@ def main():
 
 
     if mask_strategy != 'default':
+        score_token = initialize_scoring_function(
+            mask_strategy, doc_generator(pre_tokenized_documents), term_path
+        )
         logging.info("====================================================================")
         logging.info("Compute importance weights according to masking strategy")
         # Compute words masking weights (stored in 'importance_weights')
