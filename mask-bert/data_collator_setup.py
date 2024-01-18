@@ -1,4 +1,5 @@
 # data_collator_setup.py
+import os
 import logging
 
 from transformers import DataCollatorForWholeWordMask
@@ -93,25 +94,35 @@ def compute_token_importance(example, tokenizer, score_token):
 
 
 #====
-def create_tfidfscoring_function(docs, epsilon=0.00001):
+def no_tokenize(x):
+    return x
+
+def create_tfidfscoring_function(docs, epsilon=0.00001, cache_file=None):
     # TODO : how to smooth in a more inteligent way ?
     # why is epsilon = 0.00001 ??
 
     # Compute tfidf from given documents
     from sklearn.feature_extraction.text import TfidfVectorizer
-    tfidf = TfidfVectorizer(analyzer=lambda x: x)
-    tfidf.fit(docs)
+
+    from joblib import dump, load
+
+    if cache_file is not None and os.path.exists(cache_file):
+        tfidf = load(cache_file)
+        logging.info(f"Using cached Tfidf from {cache_file}")
+    else:
+        tfidf = TfidfVectorizer(analyzer=no_tokenize)
+        tfidf.fit(docs)
+        dump(tfidf, cache_file)
+        logging.info(f"Cacheing Tfidf to {cache_file}")
+    logging.info(f"Tfidf vocabulary size : {len(tfidf.get_feature_names_out())}")
 
     # Create actual scoring function that uses the computed IDF mapping
     def score_tfidf(words, normalize=True):
         # Give a score to each word according to its TF-IDF in the corpus
+        scores = tfidf.transform([words]).toarray()[0]
 
-        # Create word-TfIdf mapping
-        tfidf_dict = {k: v for k, v in zip(
-            tfidf.get_feature_names_out(),
-            tfidf.transform([' '.join(words)]).toarray()[0]
-        ) if v > 0 }
-        weights = [tfidf_dict.get(w, epsilon) for w in words]
+        words_idx = [tfidf.vocabulary_.get(w, None) for w in words]
+        weights = [scores[i] if i is not None else epsilon for i in words_idx]
 
         # softmax
         if normalize:
@@ -129,8 +140,17 @@ def create_idfscoring_function(docs, epsilon=0.00001):
 
     # Compute tfidf from given documents
     from sklearn.feature_extraction.text import TfidfVectorizer
-    tfidf = TfidfVectorizer(analyzer=lambda x: x)
-    tfidf.fit(docs)
+    from joblib import dump, load
+
+    if cache_file is not None and os.path.exists(cache_file):
+        tfidf = load(cache_file)
+        logging.info(f"Using cached Tfidf from {cache_file}")
+    else:
+        tfidf = TfidfVectorizer(analyzer=no_tokenize)
+        tfidf.fit(docs)
+        dump(tfidf, cache_file)
+        logging.info(f"Cacheing Tfidf to {cache_file}")
+    logging.info(f"Tfidf vocabulary size : {len(tfidf.get_feature_names_out())}")
 
     # Create word-IDF mapping
     idf_dict = {k: v for k, v in zip(
