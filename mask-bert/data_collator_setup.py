@@ -24,22 +24,6 @@ def initialize_data_collator(
     return collator
 
 
-def initialize_scoring_function(strategy, docs, path):
-    if strategy == 'tfidf':
-        logging.info(f"Fitting tf-idf matrix")
-        score_token = create_tfidfscoring_function(docs)
-    elif strategy == 'idf':
-        logging.info(f"Computing idf matrix")
-        score_token = create_idfscoring_function(docs)
-    elif strategy == 'term':
-        logging.info(f"Loading terms from {path}")
-        score_token = create_termscoring_function(path)
-    else:
-        score_token = None
-
-    return score_token
-
-
 def demonstrate_data_collator(data_collator, tokenized_datasets, tokenizer, num_examples=2):
     samples = [tokenized_datasets[i] for i in range(min(num_examples, len(tokenized_datasets)))]
 
