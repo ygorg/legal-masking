@@ -19,7 +19,11 @@ def load_dataset(data_dir, num_examples=None):
             else:
                 data_list = []
                 for i in range(num_examples):
-                    data_list.append(json.loads(file.readline()))
+                    line = next(file, None)
+                    if line is None:
+                        break
+                    data_list.append(json.loads(line))
+
         data = {key: [dic[key] for dic in data_list] for key in data_list[0]}
         return Dataset.from_dict(data)
 
