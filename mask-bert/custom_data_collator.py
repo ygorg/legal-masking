@@ -184,18 +184,18 @@ class DataCollatorForTermSpecificMasking(DataCollatorForWholeWordMask):
                 # If a token doesn't start with Ġ, it's part of the previous token
                 if len(cand_indexes) >= 1 and not token.startswith("Ġ"):
                     cand_indexes[-1].append(i)
-                    words[-1] += token[1:]  # ===
+                    words[-1] += token.replace("Ċ", '')  # ===
                 else:
                     cand_indexes.append([i])
-                    words.append(token)  # ===
+                    words.append(token.replace("Ġ", '').replace("Ċ", ''))  # ===
             elif is_xlm_roberta_tokenizer:
                 # If a token doesn't start with ▁, it's part of the previous token
                 if len(cand_indexes) >= 1 and not token.startswith("▁"):
                     cand_indexes[-1].append(i)
-                    words[-1] += token[1:]  # ===
+                    words[-1] += token  # ===
                 else:
                     cand_indexes.append([i])
-                    words.append(token)  # ===
+                    words.append(token[1:])  # ===
             else:
                 raise ValueError("Whole-word masking only implemented for BERT/RoBERTa/XLM-Roberta so far")
 

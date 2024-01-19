@@ -4,7 +4,10 @@ import logging
 
 from transformers import DataCollatorForWholeWordMask
 from custom_data_collator import DataCollatorForTermSpecificMasking, tolist
-
+from transformers import BertTokenizer, BertTokenizerFast
+from transformers import RobertaTokenizer, RobertaTokenizerFast
+from transformers import XLMRobertaTokenizer, XLMRobertaTokenizerFast
+from transformers import HerbertTokenizer, HerbertTokenizerFast
 
 def initialize_data_collator(strategy, tokenizer, score_column):
     if strategy in ['tfidf', 'idf', 'terms']:
@@ -50,25 +53,56 @@ def compute_token_importance(example, tokenizer, score_token):
         dict: the new row of the dataset
     """
 
-    # From DataCollator.pytorch_call
+    # From DataCollator.[torch,tf,numpy]_call
     ref_tokens = []
     for id in tolist(example["input_ids"]):
         token = tokenizer._convert_id_to_token(id)
         ref_tokens.append(token)
 
+    input_tokens = ref_tokens # ===
+
     # From DataCollator.whole_word_mask
     cand_indexes = []
     words = []  # === Reconstruct words to give to scoring function
-    for i, token in enumerate(ref_tokens):
-        if token == "[CLS]" or token == "[SEP]":
+
+    special_tokens = [val for key, val in tokenizer.special_tokens_map.items()
+                      if key not in ['unk_token', 'mask_token']]
+    is_bert_tokenizer = isinstance(tokenizer, (BertTokenizer, BertTokenizerFast))
+    is_roberta_tokenizer = isinstance(tokenizer, (RobertaTokenizer, RobertaTokenizerFast))
+    is_xlm_roberta_tokenizer = isinstance(tokenizer, (XLMRobertaTokenizer, XLMRobertaTokenizerFast))
+    for i, token in enumerate(input_tokens):
+        if token in special_tokens:
             continue
 
-        if len(cand_indexes) >= 1 and token.startswith("##"):
-            cand_indexes[-1].append(i)
-            words[-1] += token[2:]  # ===
+
+        if is_bert_tokenizer:
+            if len(cand_indexes) >= 1 and token.startswith("##"):
+                cand_indexes[-1].append(i)
+                words[-1] += token[2:]  # ===
+            else:
+                cand_indexes.append([i])
+                words.append(token)  # ===
+        elif is_roberta_tokenizer:
+            # If a token doesn't start with Ġ, it's part of the previous token
+            if len(cand_indexes) >= 1 and not token.startswith("Ġ"):
+                cand_indexes[-1].append(i)
+                words[-1] += token.replace("Ċ", '')  # ===
+            else:
+                cand_indexes.append([i])
+                words.append(token.replace("Ġ", '').replace("Ċ", ''))  # ===
+        elif is_xlm_roberta_tokenizer:
+            # If a token doesn't start with ▁, it's part of the previous token
+            if len(cand_indexes) >= 1 and not token.startswith("▁"):
+                cand_indexes[-1].append(i)
+                words[-1] += token  # ===
+            else:
+                cand_indexes.append([i])
+                words.append(token[1:])  # ===
         else:
-            cand_indexes.append([i])
-            words.append(token)  # ===
+            raise ValueError("Whole-word masking only implemented for BERT/RoBERTa/XLM-Roberta so far")
+
+    if len(cand_indexes[-1]) == 0:
+        cand_indexes = cand_indexes[:-1]
 
     example['importance_weight'] = score_token(words, normalize=False)
     return example
