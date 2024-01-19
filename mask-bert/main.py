@@ -112,10 +112,11 @@ def main():
     if term_path is not None:
         mask_strat_for_cache += '_' + os.path.basename('.'.join(term_path.split('.')[:-1]))
 
+
+    model_name = model_checkpoint.split("/")[-1]
     if args.output_dir:
         output_dir = args.output_dir
     else:
-        model_name = model_checkpoint.split("/")[-1]
         output_dir = f"../saved_models/{model_name}-e{num_epochs}-b{batch_size}-c{chunk_size}-{mask_strat_for_cache}-ex{num_example if num_example else 'all'}"
 
     stream_handler = logging.StreamHandler()
