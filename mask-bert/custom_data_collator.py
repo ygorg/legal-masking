@@ -147,19 +147,27 @@ class DataCollatorForTermSpecificMasking(DataCollatorForWholeWordMask):
     rng: np.random.Generator = np.random.default_rng(seed=12345)
     score_column: Union[str, int] = 'importance_weight'
 
-    def _whole_word_mask(self, input_tokens: List[str], word_importance_scores: List[float], max_predictions=512):
+    def get_ref_tokens(self, e):
+        """Compute the input to reconstruct_words_from_subtokens
+        This code comes from self.torch_call, self.tf_call, self.numpy_call
         """
-        Get 0/1 labels for masked tokens with whole word mask proxy
-        """
-        if not isinstance(self.tokenizer, (BertTokenizer, BertTokenizerFast,
-                                           RobertaTokenizer, RobertaTokenizerFast,
-                                           XLMRobertaTokenizer, XLMRobertaTokenizerFast,
-                                           HerbertTokenizer, HerbertTokenizerFast)):
-            warnings.warn(
-                "DataCollatorForWholeWordMask is only suitable for BertTokenizer or RobertaTokenizer-like tokenizers. "
-                "Please refer to the documentation for more information."
-            )
+        ref_tokens = []
+        for id in tolist(e["input_ids"]):
+            token = self.tokenizer._convert_id_to_token(id)
+            ref_tokens.append(token)
 
+        # For Chinese tokens, we need extra inf to mark sub-word, e.g [喜,欢]-> [喜，##欢]
+        if "chinese_ref" in e:
+            ref_pos = tolist(e["chinese_ref"])
+            len_seq = len(e["input_ids"])
+            for i in range(len_seq):
+                if i in ref_pos:
+                    ref_tokens[i] = "##" + ref_tokens[i]
+
+        return ref_tokens
+
+    
+    def reconstruct_words_from_subtokens(self, input_tokens: List[str]):
         cand_indexes = []
         words = []  # === Reconstruct words to give to scoring function
 
@@ -184,23 +192,41 @@ class DataCollatorForTermSpecificMasking(DataCollatorForWholeWordMask):
                 # If a token doesn't start with Ġ, it's part of the previous token
                 if len(cand_indexes) >= 1 and not token.startswith("Ġ"):
                     cand_indexes[-1].append(i)
-                    words[-1] += token[1:]  # ===
+                    words[-1] += token.replace("Ċ", '')  # ===
                 else:
                     cand_indexes.append([i])
-                    words.append(token)  # ===
+                    words.append(token.replace("Ġ", '').replace("Ċ", ''))  # ===
             elif is_xlm_roberta_tokenizer:
                 # If a token doesn't start with ▁, it's part of the previous token
                 if len(cand_indexes) >= 1 and not token.startswith("▁"):
                     cand_indexes[-1].append(i)
-                    words[-1] += token[1:]  # ===
+                    words[-1] += token  # ===
                 else:
                     cand_indexes.append([i])
-                    words.append(token)  # ===
+                    words.append(token[1:])  # ===
             else:
                 raise ValueError("Whole-word masking only implemented for BERT/RoBERTa/XLM-Roberta so far")
 
         if len(cand_indexes[-1]) == 0:
             cand_indexes = cand_indexes[:-1]
+
+        return cand_indexes, words
+
+
+    def _whole_word_mask(self, input_tokens: List[str], word_importance_scores: List[float], max_predictions=512):
+        """
+        Get 0/1 labels for masked tokens with whole word mask proxy
+        """
+        if not isinstance(self.tokenizer, (BertTokenizer, BertTokenizerFast,
+                                           RobertaTokenizer, RobertaTokenizerFast,
+                                           XLMRobertaTokenizer, XLMRobertaTokenizerFast,
+                                           HerbertTokenizer, HerbertTokenizerFast)):
+            warnings.warn(
+                "DataCollatorForWholeWordMask is only suitable for BertTokenizer or RobertaTokenizer-like tokenizers. "
+                "Please refer to the documentation for more information."
+            )
+
+        cand_indexes, words = self.reconstruct_words_from_subtokens(input_tokens)
 
         # =================
         # Instead of randomly shuffling the elements, sample n times an element according to its importance score

@@ -4,11 +4,11 @@ import argparse
 import os
 from my_tokenize import initialize_tokenizer
 from data_setup import load_custom_dataset
-from my_tokenize import tokenize_function, pretokenize_function, group_texts
+from my_tokenize import tokenize_function, group_texts
 from data_collator_setup import (
     initialize_data_collator, create_tfidfscoring_function,
     create_idfscoring_function, create_termscoring_function,
-    demonstrate_data_collator, compute_token_importance
+    demonstrate_data_collator
 )
 from model_trainer import initialize_model_and_trainer, downsample_dataset, train_and_evaluate
 
@@ -16,18 +16,17 @@ masking_strategies = [
     'tfidf', 'idf', 'term', 'default'
 ]
 
-def doc_generator(dataset, batch_size=10000):
+def doc_generator(dataset, column_name, batch_size=10000):
     # HG datasets are always on the hard drive, and are in memory on
     #  the fly. For training tf-idf we use SKlearn, in order to pass
-    #  the documents to Sklearn just writing
-    #  `pre_tokenized_documents['pretokenized']` loads all the
-    #  documents in the RAM.
+    #  the documents to Sklearn just writing `dataset['column_name']`
+    #  loads all the documents in the RAM.
     # This function acts as a buffer for loading only 10000
     #  documents at a time.
-    dataset_ = dataset.to_iterable_dataset().iter(batch_size)
-    for i, batch in enumerate(dataset_):
+
+    for i, batch in enumerate(dataset.iter(batch_size)):
         logging.info(f'Loaded {batch_size * (i+1)} documents of {len(dataset)}')
-        for doc in batch['pretokenized']:
+        for doc in batch[column_name]:
             yield doc
 
 
@@ -142,26 +141,27 @@ def main():
     if cache_dir is not None:
         os.makedirs(cache_dir, exist_ok=True)
         os.makedirs(f"{cache_dir}/tokenization", exist_ok=True)
-        os.makedirs(f"{cache_dir}/pre-tokenization", exist_ok=True)
+        os.makedirs(f"{cache_dir}/word_reconstructed", exist_ok=True)
         os.makedirs(f"{cache_dir}/tfidf", exist_ok=True)
         os.makedirs(f"{cache_dir}/tokenization-strategy", exist_ok=True)
         os.makedirs(f"{cache_dir}/tokenization-split", exist_ok=True)
 
         # Defining all cache file_name in order to check whether something was already done
-        cache_fn_pretokenize = f"{cache_dir}/pre-tokenization/{model_name}-ex{num_example if num_example else 'all'}-train.arrow"
         cache_fn_tfidf = f"{cache_dir}/tfidf/{model_name}-ex{num_example if num_example else 'all'}-train.joblib"
         cache_fn_tokenize = {}
+        cache_fn_reconstructed = {}
         cache_fn_word_import = {}
         cache_fn_word_import_split = {}
         for split in datasets.keys():
             cache_fn_tokenize[split] = f"{cache_dir}/tokenization/{model_name}-ex{num_example if num_example else 'all'}-{split}.arrow"
+            cache_fn_reconstructed[split] = f"{cache_dir}/word_reconstructed/{model_name}-ex{num_example if num_example else 'all'}-{split}.arrow"
             cache_fn_word_import[split] = f"{cache_dir}/tokenization-strategy/{model_name}-{mask_strat_for_cache}-ex{num_example if num_example else 'all'}-{split}.arrow"
             cache_fn_word_import_split[split] = f"{cache_dir}/tokenization-split/{model_name}-{mask_strat_for_cache}-c{chunk_size}-ex{num_example if num_example else 'all'}-{split}.arrow"
     else:
         logging.info('No cache will be used')
-        cache_fn_pretokenize = None
         cache_fn_tfidf = None
         cache_fn_tokenize = {split: None for split in datasets.keys()}
+        cache_fn_reconstructed = {split: None for split in datasets.keys()}
         cache_fn_word_import = {split: None for split in datasets.keys()}
         cache_fn_word_import_split = {split: None for split in datasets.keys()}
 
@@ -197,50 +197,79 @@ def main():
     if mask_strategy != 'default':
 
         logging.info("====================================================================")
-        logging.info("Pre-Tokenizing")
+        logging.info("Reconstructing words")
 
-        # Pretokenize documents for training the masking strategy because
-        #  we operate on whole words
-        pre_tokenized_documents = datasets['train'].map(
-            lambda examples: pretokenize_function(tokenizer, examples),
-            remove_columns=['text', 'sector', 'descriptor', 'year', '__index_level_0__'],
-            cache_file_name=cache_fn_pretokenize,
-            batched=True,
-            num_proc=num_workers,
-            batch_size=10000
-        )
-        logging.info(f'Cacheing to {cache_fn_pretokenize}')
+        def reconstruct_words(example, collator):
+            # Apply the same treatment as in DataCollatorForWholeWordMasking
+
+            # This function could cause problem for processing chinese with a tokenizer other than Bert
+            ref_tokens = collator.get_ref_tokens(example)
+
+            _, words = collator.reconstruct_words_from_subtokens(ref_tokens)
+            example['reconstructed_words'] = words
+            return example
+
+        # Reconstruct words so we can compute weights of whole words instead of subtokens
+        for split in tokenized_datasets.keys():
+            tokenized_datasets[split] = tokenized_datasets[split].map(
+                lambda examples: apply_to_batch(reconstruct_words, examples, kwargs_fct={'collator': data_collator}),
+                batched=True,
+                num_proc=num_workers,
+                cache_file_name=cache_fn_reconstructed[split],
+            )
+            logging.info(f'Cacheing to {cache_fn_reconstructed[split]}')
+
+        logging.info('Example of reconstructed document:')
+        fst_row = tokenized_datasets['train'][0]
+        logging.info(tokenizer.convert_ids_to_tokens(fst_row['input_ids'][:20]))
+        logging.info(fst_row['reconstructed_words'][:10])
 
         if mask_strategy == 'tfidf':
+            logging.info("====================================================================")
             logging.info(f"Fitting tf-idf matrix")
             score_token = create_tfidfscoring_function(
-                doc_generator(pre_tokenized_documents),
-                cache_file=cache_fn_tfidf
+                doc_generator(tokenized_datasets['train'], 'reconstructed_words'),
+                cache_file=cache_fn_tfidf,
             )
         elif mask_strategy == 'idf':
-            logging.info(f"Computing idf matrix")
+            logging.info("====================================================================")
+            logging.info(f"Fitting tf-idf matrix")
             score_token = create_idfscoring_function(
-                doc_generator(pre_tokenized_documents),
-                cache_file=cache_fn_tfidf
+                doc_generator(tokenized_datasets['train'], 'reconstructed_words'),
+                cache_file=cache_fn_tfidf,
             )
         elif mask_strategy == 'term':
+            logging.info("====================================================================")
             logging.info(f"Loading terms from {term_path}")
             score_token = create_termscoring_function(term_path)
+
+        logging.info('Example of importance weights:')
+        fst_row = tokenized_datasets['train'][0]
+        logging.info(fst_row['reconstructed_words'][:10])
+        logging.info(score_token(fst_row['reconstructed_words'][:10]))
 
         logging.info("====================================================================")
         logging.info("Compute importance weights according to masking strategy")
 
+        def compute_token_importance(example, score_token):
+            example['importance_weight'] = score_token(example['reconstructed_words'], normalize=False)
+            return example
+
         # Compute words masking weights (stored in 'importance_weights')
         for split in tokenized_datasets.keys():
-
             tokenized_datasets[split] = tokenized_datasets[split].map(
-                lambda examples: apply_to_batch(compute_token_importance, examples, kwargs_fct={'tokenizer': tokenizer, 'score_token': score_token}),
+                lambda examples: apply_to_batch(compute_token_importance, examples, kwargs_fct={'score_token': score_token}),
                 batched=True,
-                batch_size=1000,
                 num_proc=num_workers,
-                cache_file_name=cache_fn_word_import[split]
+                remove_columns=['reconstructed_words'],
+                cache_file_name=cache_fn_word_import[split],
             )
             logging.info(f'Cacheing to {cache_fn_word_import[split]}')
+
+        logging.info('Example of computed importance weights:')
+        fst_row = tokenized_datasets['train'][0]
+        logging.info(reconstruct_words(fst_row, data_collator)['reconstructed_words'][:10])
+        logging.info(fst_row['importance_weight'][:10])
 
     # =================================================================
     # Spliting documents

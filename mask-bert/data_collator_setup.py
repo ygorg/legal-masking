@@ -3,7 +3,7 @@ import os
 import logging
 
 from transformers import DataCollatorForWholeWordMask
-from custom_data_collator import DataCollatorForTermSpecificMasking, tolist
+from custom_data_collator import DataCollatorForTermSpecificMasking
 
 
 def initialize_data_collator(strategy, tokenizer, score_column):
@@ -32,46 +32,6 @@ def demonstrate_data_collator(data_collator, tokenized_datasets, tokenizer, num_
     for s in samples:
         chunk = data_collator([s])["input_ids"][0]
         logging.info(f"{tokenizer.decode(chunk)}")
-
-
-def compute_token_importance(example, tokenizer, score_token):
-    """Computes importance score of words in a document.
-    
-    This function should be use in a `datasets.Dataset.map`. This
-    function does what is done in the data collator. But for this
-    experiment we need to precompute the importance scores.
-    
-    Args:
-        example (dict): a row of a huggingface Dataset
-        tokenizer (tokenizers.Tokenizer): tokenizer used to tokenize the example
-        score_token (Callable[list(words) -> list(scores)]): a function that returns a score for every word in the example
-    
-    Returns:
-        dict: the new row of the dataset
-    """
-
-    # From DataCollator.pytorch_call
-    ref_tokens = []
-    for id in tolist(example["input_ids"]):
-        token = tokenizer._convert_id_to_token(id)
-        ref_tokens.append(token)
-
-    # From DataCollator.whole_word_mask
-    cand_indexes = []
-    words = []  # === Reconstruct words to give to scoring function
-    for i, token in enumerate(ref_tokens):
-        if token == "[CLS]" or token == "[SEP]":
-            continue
-
-        if len(cand_indexes) >= 1 and token.startswith("##"):
-            cand_indexes[-1].append(i)
-            words[-1] += token[2:]  # ===
-        else:
-            cand_indexes.append([i])
-            words.append(token)  # ===
-
-    example['importance_weight'] = score_token(words, normalize=False)
-    return example
 
 
 #====

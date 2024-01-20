@@ -1,7 +1,8 @@
 # my_tokenize.py
+import re
 import logging
-from transformers import AutoModelForMaskedLM, AutoTokenizer
 
+from transformers import AutoModelForMaskedLM, AutoTokenizer
 from transformers import BertTokenizer, BertTokenizerFast
 from transformers import RobertaTokenizer, RobertaTokenizerFast
 from transformers import XLMRobertaTokenizer, XLMRobertaTokenizerFast
@@ -12,41 +13,24 @@ def initialize_tokenizer(model_checkpoint="models/bert-base-uncased"):
 
 # my_tokenizer.py
 def tokenize_function(tokenizer, examples):
-    result = tokenizer(examples["text"])
-    if tokenizer.is_fast:
-        result["word_ids"] = [result.word_ids(i) for i in range(len(result["input_ids"]))]
-    return result
 
+    txt = examples["text"]
 
-def pretokenize_function(tokenizer, examples):
-    """Returns text tokenized on words and not subwords, adaptable for BERT and RoBERTa."""
-    pretokenized = []
+    # Some special token occur naturally in some documents ([CLS]), if
+    #  they appear we split them into "[CLS ]"
     is_bert_tokenizer = isinstance(tokenizer, (BertTokenizer, BertTokenizerFast))
     is_roberta_tokenizer = isinstance(tokenizer, (RobertaTokenizer, RobertaTokenizerFast))
     is_xlm_roberta_tokenizer = isinstance(tokenizer, (XLMRobertaTokenizer, XLMRobertaTokenizerFast))
+    if is_bert_tokenizer:
+        split_spe_tokens = re.compile(r'(\[UNK|\[SEP|\[PAD|\[CLS|\[MASK)(\])')
+    elif is_roberta_tokenizer or is_xlm_roberta_tokenizer:
+        split_spe_tokens = re.compile(r'(<s|</s|<unk|<pad|<mask)(>)')
+    txt = [split_spe_tokens.sub(r'\1 \2', t) for t in txt]
 
-    for txt in examples['text']:
-        if is_bert_tokenizer:
-            # Pour BERT
-            txt = tokenizer.backend_tokenizer.normalizer.normalize_str(txt)
-            txt = tokenizer.backend_tokenizer.pre_tokenizer.pre_tokenize_str(txt)
-            txt = [t for t, off in txt]
-        elif is_roberta_tokenizer or is_xlm_roberta_tokenizer:
-            # Pour RoBERTa
-            encoded_input = tokenizer.encode_plus(txt, add_special_tokens=False, return_offsets_mapping=True)
-            offsets = encoded_input['offset_mapping']
-            tokens = [txt[start:end] for (start, end) in offsets if start != end]
-            txt = tokens
-            print(encoded_input)
-            input()
-        else:
-            # Gestion par défaut
-            txt = tokenizer.tokenize(txt)
-
-        pretokenized.append(txt)
-
-    examples['pretokenized'] = pretokenized
-    return examples
+    result = tokenizer(txt)
+    if tokenizer.is_fast:
+        result["word_ids"] = [result.word_ids(i) for i in range(len(result["input_ids"]))]
+    return result
 
 
 def group_texts(examples, chunk_size, split_importance_weights=True):
