@@ -73,6 +73,7 @@ def main():
         parser.add_argument("--term-path", type=str, default=None, help="Path to list of terms (one term per line)")
 
         parser.add_argument("--cache-dir", type=str, default=None, help="Directory to cache pretreatments (default: no cache)")
+        parser.add_argument("--load-from-cache-file", choices=['true', 'false'], default='true', help="If False force recompute the cache (default: true)")
         parser.add_argument("--num-workers", type=int, default=1, help="Number of processes to use for pretreating data (default: 1)")
         parser.add_argument("--output-dir", type=str, default=None, help="Directory to save model's checkpoints (default: models/{model_name}-e{num_epochs}-b{batch_size}-{mask_strategy})")
         parser.add_argument("--num-example", type=int, default=None, help="Number of example to load (for debugging purposes) (default: all)")
@@ -96,6 +97,7 @@ def main():
 
     term_path = args.term_path
     cache_dir = args.cache_dir
+    load_from_cache_file = True if args.load_from_cache_file == 'true' else False
     num_workers = args.num_workers
 
     if mask_strategy != 'term':
@@ -184,7 +186,8 @@ def main():
             lambda examples: tokenize_function(tokenizer, examples),
             batched=True,
             remove_columns=['id', 'text', 'sector', 'descriptor', 'year', '__index_level_0__'],
-            cache_file_name=cache_fn_tokenize[split]
+            cache_file_name=cache_fn_tokenize[split],
+            load_from_cache_file=load_from_cache_file
         )
         logging.info(f'Cacheing to {cache_fn_tokenize[split]}')
 
@@ -216,6 +219,7 @@ def main():
                 batched=True,
                 num_proc=num_workers,
                 cache_file_name=cache_fn_reconstructed[split],
+                load_from_cache_file=load_from_cache_file,
             )
             logging.info(f'Cacheing to {cache_fn_reconstructed[split]}')
 
@@ -230,6 +234,7 @@ def main():
             score_token = create_tfidfscoring_function(
                 doc_generator(tokenized_datasets['train'], 'reconstructed_words'),
                 cache_file=cache_fn_tfidf,
+                load_from_cache_file=load_from_cache_file,
             )
         elif mask_strategy == 'idf':
             logging.info("====================================================================")
@@ -237,6 +242,7 @@ def main():
             score_token = create_idfscoring_function(
                 doc_generator(tokenized_datasets['train'], 'reconstructed_words'),
                 cache_file=cache_fn_tfidf,
+                load_from_cache_file=load_from_cache_file,
             )
         elif mask_strategy == 'term':
             logging.info("====================================================================")
@@ -263,6 +269,7 @@ def main():
                 num_proc=num_workers,
                 remove_columns=['reconstructed_words'],
                 cache_file_name=cache_fn_word_import[split],
+                load_from_cache_file=load_from_cache_file,
             )
             logging.info(f'Cacheing to {cache_fn_word_import[split]}')
 
@@ -282,8 +289,9 @@ def main():
                 examples, chunk_size, split_importance_weights=mask_strategy != 'default'
             ),
             batched=True,
+            num_proc=num_workers,
             cache_file_name=cache_fn_word_import_split[split],
-            num_proc=num_workers
+            load_from_cache_file=load_from_cache_file,
         )
         logging.info(f'Cacheing to {cache_fn_word_import_split[split]}')
 
