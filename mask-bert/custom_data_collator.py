@@ -1,9 +1,11 @@
 # ====
 # From https://github.com/huggingface/transformers/blob/514de24abfd4416aeba6a6455ad5920f57f3567d/src/transformers/data/data_collator.py#L946
-import numpy as np
 import random
+import logging
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, NewType, Optional, Tuple, Union, Mapping
+
+import numpy as np
 from transformers import BertTokenizer, BertTokenizerFast, DataCollatorForWholeWordMask
 from transformers import RobertaTokenizer, RobertaTokenizerFast
 from transformers import XLMRobertaTokenizer, XLMRobertaTokenizerFast
@@ -146,6 +148,7 @@ class DataCollatorForTermSpecificMasking(DataCollatorForWholeWordMask):
 
     rng: np.random.Generator = np.random.default_rng(seed=12345)
     score_column: Union[str, int] = 'importance_weight'
+    mask_choice_strategy: str = 'weighted_random'
 
     def get_ref_tokens(self, e):
         """Compute the input to reconstruct_words_from_subtokens
@@ -212,6 +215,28 @@ class DataCollatorForTermSpecificMasking(DataCollatorForWholeWordMask):
 
         return cand_indexes, words
 
+    def weighted_random_method(self, scores, temperature=.1):
+        # Instead of randomly shuffling the elements, sample n times an element according to its importance score
+        # Basically it randomly "orders" the elements according to their probability
+
+        # Softmax over the importance scores
+        temp_scores = [s**(1/temperature) for s in scores]
+        sum_ = sum(temp_scores)
+        norm_scores = [s/sum_ for s in temp_scores]
+        # Randomly (based of norm_scores) choose words to mask
+        idx_to_mask = self.rng.choice(
+            range(len(scores)),  # indexes of each word
+            len(scores),  # number of words to choose (all of them)
+            replace=False,  # sampling without replacement (i.e. ensure we cannot choose the same element twice)
+            p=norm_scores  # weight of each word
+        )        
+        return idx_to_mask.tolist()
+
+    def top_n_method(self, scores):    
+        # Sort the scores so the first element is the highest score
+        idx_to_mask = np.argsort(scores)[::-1]
+        
+        return idx_to_mask.tolist()
 
     def _whole_word_mask(self, input_tokens: List[str], word_importance_scores: List[float], max_predictions=512):
         """
@@ -226,22 +251,21 @@ class DataCollatorForTermSpecificMasking(DataCollatorForWholeWordMask):
                 "Please refer to the documentation for more information."
             )
 
-        cand_indexes, words = self.reconstruct_words_from_subtokens(input_tokens)
+        cand_indexes, _ = self.reconstruct_words_from_subtokens(input_tokens)
 
         # =================
-        # Instead of randomly shuffling the elements, sample n times an element according to its importance score
-        # Basically it randomly order the elements according to their probability
+        # Custom masking choice strategy
+        if self.mask_choice_strategy == 'weighted_random':
+            logging.info('Using weighted_random')
+            to_mask = self.weighted_random_method(word_importance_scores)
+        elif self.mask_choice_strategy == 'top_n':
+            logging.info('Using top_n')
+            to_mask = self.top_n_method(word_importance_scores)
+        else:
+            raise ArgumentError(f'No mask choice strategy named: {self.mask_choice_strategy}')
 
-        # Softmax over the importance scores
-        sum_ = sum(word_importance_scores)
-        word_importance_scores = [s/sum_ for s in word_importance_scores]
-
-        # Sample the elements
-        idx_cand_indexes = self.rng.choice(
-            range(len(cand_indexes)), len(cand_indexes),
-            replace=False, p=word_importance_scores
-        )
-        cand_indexes = [cand_indexes[i] for i in idx_cand_indexes]
+        # Order cand_indexes according to `to_mask`
+        cand_indexes = [cand_indexes[i] for i in to_mask]
         # ==================
 
         num_to_predict = min(max_predictions, max(1, int(round(len(input_tokens) * self.mlm_probability))))

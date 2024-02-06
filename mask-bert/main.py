@@ -69,8 +69,9 @@ def main():
         parser.add_argument("--num-epochs", type=int, default=3, help="Number of training epochs (default: 3)")
         parser.add_argument("--chunk-size", type=int, default=128, help="Split the documents into sequences of X tokens (default: 128)")
 
-        parser.add_argument("--mask-strategy", type=str, choices=masking_strategies, default='default', help="Scoring function to use for masking tokens (default: default)")
+        parser.add_argument("--mask-strategy", type=str, choices=masking_strategies, default='weighted_random', help="Scoring function to use for masking tokens (default: default)")
         parser.add_argument("--term-path", type=str, default=None, help="Path to list of terms (one term per line)")
+        parser.add_argument("--mask-choice", type=str, choices=['weighted_random', 'top_n'], default=None, help="How to choose which token to mask according to the importance score (default: weighted_random)")
 
         parser.add_argument("--cache-dir", type=str, default=None, help="Directory to cache pretreatments (default: no cache)")
         parser.add_argument("--load-from-cache-file", choices=['true', 'false'], default='true', help="If False force recompute the cache (default: true)")
@@ -93,6 +94,7 @@ def main():
     num_epochs = args.num_epochs
     num_example = args.num_example
     mask_strategy = args.mask_strategy
+    mask_choice = args.mask_choice
     batch_size = args.batch_size
 
     term_path = args.term_path
@@ -177,7 +179,8 @@ def main():
         data_collator = DataCollatorForTermSpecificMasking(
             tokenizer=tokenizer,
             return_tensors="pt",
-            score_column='importance_weight'
+            score_column='importance_weight',
+            mask_choice_strategy=mask_choice
         )
     else:
         data_collator = DataCollatorForWholeWordMask(
