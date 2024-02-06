@@ -268,7 +268,7 @@ def main():
 
         def compute_token_importance(example, score_tokens):
             # The normalization will occur at masking time
-            example['importance_weight'] = score_tokens(example['reconstructed_words'], normalize=False)
+            example['importance_weight'] = score_tokens(example.pop('reconstructed_words'), normalize=False)
             return example
 
         # Compute words masking weights (stored in 'importance_weights')

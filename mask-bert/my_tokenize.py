@@ -45,7 +45,7 @@ def group_texts(examples, chunk_size, split_importance_weights=True):
         doc_length = (doc_length // chunk_size) * chunk_size
         # Segment into chunks
         for i in range(0, doc_length, chunk_size):
-            chunk = {key: single_doc[key][i:i + chunk_size] for key in single_doc.keys() if key not in ["importance_weight", 'reconstructed_words']}
+            chunk = {key: single_doc[key][i:i + chunk_size] for key in single_doc.keys() if key not in ["importance_weight"]}
 
             # tokens   = A #B #C D E F #G H
             # word_ids = 0 0  0  1 2 3 3  4
@@ -68,7 +68,7 @@ def group_texts(examples, chunk_size, split_importance_weights=True):
                     i -= 1
                 end = chunk['word_ids'][i]
                 chunk['importance_weight'] = single_doc['importance_weight'][beg:end+1]
-                chunk['reconstructed_words'] = single_doc['reconstructed_words'][beg:end+1]
+                # chunk['reconstructed_words'] = single_doc['reconstructed_words'][beg:end+1]
             # Add chunk to result
             for key in chunk.keys():
                 result[key].append(chunk[key])
