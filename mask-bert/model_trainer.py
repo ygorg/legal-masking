@@ -4,11 +4,12 @@ import logging
 
 import torch
 from transformers import AutoModelForMaskedLM, TrainingArguments, Trainer
+import idr_torch
 
 def initialize_model_and_trainer(
         tokenized_datasets, data_collator, tokenizer,
         output_dir, model_checkpoint,
-        batch_size, num_epochs
+        batch_size, num_epochs, logging_dir
     ):
 
     model = AutoModelForMaskedLM.from_pretrained(model_checkpoint)
@@ -32,20 +33,26 @@ def initialize_model_and_trainer(
         output_dir=output_dir,  # Specify the output directory
         evaluation_strategy="epoch",
         save_strategy = "epoch",
-        save_total_limit = 1,
-	load_best_model_at_end = True,
-	num_train_epochs= num_epochs,
+        logging_steps = 500,
+        logging_dir = logging_dir,
+        log_level='info',
+        save_total_limit = 20,
+        load_best_model_at_end = True,
+        num_train_epochs= num_epochs,
         learning_rate=2e-5,
         weight_decay=0.01,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
-	report_to="none",
+        report_to="tensorboard",
         push_to_hub=False,  # Set to False unless you also want to push to Hugging Face's Model Hub
-        # fp16=True, # when we use cuda
-        logging_steps=logging_steps,
+        fp16=True, # when we use cuda
+        gradient_accumulation_steps = 1,
+        # logging_steps=logging_steps,
         remove_unused_columns=False,  # In order to keep importance_weight column
         use_mps_device=str(model.device).startswith('mps')  # For MacOS
     )
+
+    training_args.local_rank = idr_torch.local_rank
 
     # Initialize the Trainer
     trainer = Trainer(

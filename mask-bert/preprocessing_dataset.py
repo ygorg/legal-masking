@@ -1,24 +1,19 @@
 import os
 import logging
 import argparse
-import os
 from my_tokenize import initialize_tokenizer
-from data_setup import load_custom_dataset
 from my_tokenize import tokenize_function, group_texts
-from data_collator_setup import (
-    initialize_data_collator, create_tfidfscoring_function,
-    create_idfscoring_function, create_termscoring_function,
+import data_setup
+from custom_data_collator import (
+    DataCollatorForTermSpecificMasking,
+    DataCollatorForWholeWordMask,
     demonstrate_data_collator
 )
-from model_trainer import initialize_model_and_trainer, downsample_dataset, train_and_evaluate
-import torch
+from scoring_functions import (
+    TfIdfScoring, IdfScoring, MetaDiscourseScoring,
+    TermScoring, masking_strategies
+)
 
-import idr_torch
-import torch.distributed as dist
-
-masking_strategies = [
-    'tfidf', 'idf', 'term', 'default'
-]
 
 def doc_generator(dataset, column_name, batch_size=10000):
     # HG datasets are always on the hard drive, and are in memory on
@@ -29,16 +24,17 @@ def doc_generator(dataset, column_name, batch_size=10000):
     #  documents at a time.
 
     for i, batch in enumerate(dataset.iter(batch_size)):
-        logging.info(f'Loaded {batch_size * (i+1)} documents of {len(dataset)}')
+        logging.info(f'Loaded {batch_size * (i + 1)} documents of {len(dataset)}')
         for doc in batch[column_name]:
             yield doc
 
 
 def apply_to_batch(fct, batch, kwargs_fct={}):
     """Apply a function that deals with only one example to a batch
-    
+
     Args:
-        fct (Callable[dict[str, Any] -> dict[str, Any]]): takes a row of a datasets.Dataset and returns a new row
+        fct (Callable[dict[str, Any] -> dict[str, Any]]): takes a row
+            of a datasets.Dataset and returns a new row
         batch (dict[str, list[Any]]): a batch of examples
         kwargs_fct (dict[str, Any]): arguments for `fct`
     Returns:
@@ -67,70 +63,75 @@ def main():
         # =============================================================================
         parser = argparse.ArgumentParser(description="Run the model training and evaluation")
         parser.add_argument("--data-path", type=str, default="./data", help="Path to data (a directory containing {test, train, validation}.json (default: ./data)")
+        parser.add_argument("--num-example", type=int, default=None, help="Number of example to load (for debugging purposes) (default: all)")
+
         parser.add_argument("--model-checkpoint", type=str, default="bert-base-uncased", help="Model name (or path) of huggingface model (default: bert-base-uncased)")
 
-        # parser.add_argument("--batch-size", type=int, default=16, help="Training/Evaluation batch size (default: 16)")
-        # parser.add_argument("--num-epochs", type=int, default=3, help="Number of training epochs (default: 3)")
-        parser.add_argument("--chunk-size", type=int, default=128, help="Split the documents into sequences of X tokens (default: 128)")
-
-        parser.add_argument("--mask-strategy", type=str, choices=masking_strategies, default='default', help="Scoring function to use for masking tokens (default: default)")
+        parser.add_argument("--mask-strategy", type=str, choices=masking_strategies, default='weighted_random', help="Scoring function to use for masking tokens (default: default)")
         parser.add_argument("--term-path", type=str, default=None, help="Path to list of terms (one term per line)")
+
+        parser.add_argument("--chunk-size", type=int, default=128, help="Split the documents into sequences of X tokens (default: 128)")
 
         parser.add_argument("--cache-dir", type=str, default=None, help="Directory to cache pretreatments (default: no cache)")
         parser.add_argument("--load-from-cache-file", choices=['true', 'false'], default='true', help="If False force recompute the cache (default: true)")
         parser.add_argument("--num-workers", type=int, default=1, help="Number of processes to use for pretreating data (default: 1)")
-        # parser.add_argument("--output-dir", type=str, default=None, help="Directory to save model's checkpoints (default: models/{model_name}-e{num_epochs}-b{batch_size}-{mask_strategy})")
-        parser.add_argument("--num-example", type=int, default=None, help="Number of example to load (for debugging purposes) (default: all)")
 
-        # parser.add_argument("--logging_steps", type=int, default=50, help="Logging steps")
-        # 
-        # Parse arguments
+        # Training arguments
+        # parser.add_argument("--batch-size", type=int, default=32, help="Training/Evaluation batch size (default: 32)")
+        # parser.add_argument("--num-epochs", type=int, default=3, help="Number of training epochs (default: 3)")
+        # parser.add_argument("--jean-zay-config", type=str, default="1", help="Configuration de jeanzay (node, gpu...)")
+
+        # parser.add_argument("--mask-choice", type=str, choices=['weighted_random', 'top_n'], default=None, help="How to choose which token to mask according to the importance score (default: weighted_random)")
+
+        # parser.add_argument("--output-dir", type=str, default=None, help="Directory to save model's checkpoints (default: models/{model_name}-e{num_epochs}-b{batch_size}-{mask_strategy})")
+
         return parser.parse_args()
     # =============================================================================
-
-
 
     args = arguments()
 
     data_dir = args.data_path  # Specify your data directory
-    model_checkpoint = args.model_checkpoint
-    # version = args.version
-
-    # num_epochs = args.num_epochs
     num_example = args.num_example
-    mask_strategy = args.mask_strategy
-    # batch_size = args.batch_size
 
+    model_checkpoint = args.model_checkpoint
+
+    mask_strategy = args.mask_strategy
     term_path = args.term_path
+
+    chunk_size = args.chunk_size  # Split the documents every CHUNK_SIZE tokens
+
     cache_dir = args.cache_dir
     load_from_cache_file = True if args.load_from_cache_file == 'true' else False
     num_workers = args.num_workers
 
+    # batch_size = args.batch_size
+    # num_epochs = args.num_epochs
+    # jean_zay_config = args.jean_zay_config
+
+    # mask_choice = args.mask_choice
+
+    # output_dir = args.output_dir
+
     if mask_strategy != 'term':
         term_path = None
-    if mask_strategy == 'term' and term_path == None:
+    if mask_strategy == 'term' and term_path is None:
         raise Exception('Masking strategy is "term" but not term list provided. Please provide a file to --term-path.')
-
-    chunk_size = args.chunk_size  # Split the documents every CHUNK_SIZE tokens
-
 
     # Name of the masking strategy with the name of the term used if any
     mask_strat_for_cache = f'{mask_strategy}'
     if term_path is not None:
         mask_strat_for_cache += '_' + os.path.basename('.'.join(term_path.split('.')[:-1]))
 
+    # If we are on JeanZay, the model might already be downloaded at $DSDIR/HuggingFace_models
+    if 'DSDIR' in os.environ:
+        JZ_CACHED_MODEL = os.path.join(os.environ['DSDIR'], 'HuggingFace_Models', model_checkpoint)
+        if os.path.exists(JZ_CACHED_MODEL):
+            logging.info(f"Using {model_checkpoint} from Jean-Zay at {JZ_CACHED_MODEL}")
+            model_checkpoint = JZ_CACHED_MODEL
+
+    tokenizer = initialize_tokenizer(model_checkpoint=model_checkpoint)
 
     model_name = model_checkpoint.split("/")[-1]
-    # if args.output_dir:
-    #     output_dir = args.output_dir
-    # else:
-    #     output_dir = f"../saved_models/{model_name}-e{num_epochs}-b{batch_size}-c{chunk_size}-{mask_strat_for_cache}-ex{num_example if num_example else 'all'}"
-
-
-    import datasets, os
-
-    root_path = os.environ['DSDIR'] + '/HuggingFace_Models/'
-
 
     stream_handler = logging.StreamHandler()
     stream_handler.setLevel(logging.INFO)
@@ -147,21 +148,21 @@ def main():
     # =================================================================
     # Pre processing data
     # =================================================================
-    datasets = load_custom_dataset(data_dir, num_example)
+    datasets = data_setup.load_dataset(data_dir, num_example)
 
-    tokenizer = initialize_tokenizer(model_checkpoint= root_path + model_checkpoint if model_checkpoint == "bert-base-uncased" else model_checkpoint)
+    tokenizer = initialize_tokenizer(model_checkpoint=model_checkpoint)
 
     # Making sure the cache directory exists
     if cache_dir is not None:
         os.makedirs(cache_dir, exist_ok=True)
         os.makedirs(f"{cache_dir}/tokenization", exist_ok=True)
         os.makedirs(f"{cache_dir}/word_reconstructed", exist_ok=True)
-        os.makedirs(f"{cache_dir}/tfidf", exist_ok=True)
+        os.makedirs(f"{cache_dir}/scoring", exist_ok=True)
         os.makedirs(f"{cache_dir}/tokenization-strategy", exist_ok=True)
         os.makedirs(f"{cache_dir}/tokenization-split", exist_ok=True)
 
         # Defining all cache file_name in order to check whether something was already done
-        cache_fn_tfidf = f"{cache_dir}/tfidf/{model_name}-ex{num_example if num_example else 'all'}-train.joblib"
+        cache_fn_scoring_prefix = f"{cache_dir}/scoring/{model_name}-ex{num_example if num_example else 'all'}-train"
         cache_fn_tokenize = {}
         cache_fn_reconstructed = {}
         cache_fn_word_import = {}
@@ -173,21 +174,28 @@ def main():
             cache_fn_word_import_split[split] = f"{cache_dir}/tokenization-split/{model_name}-{mask_strat_for_cache}-c{chunk_size}-ex{num_example if num_example else 'all'}-{split}.arrow"
     else:
         logging.info('No cache will be used')
-        cache_fn_tfidf = None
+        cache_fn_scoring_prefix = None
         cache_fn_tokenize = {split: None for split in datasets.keys()}
         cache_fn_reconstructed = {split: None for split in datasets.keys()}
         cache_fn_word_import = {split: None for split in datasets.keys()}
         cache_fn_word_import_split = {split: None for split in datasets.keys()}
 
-
-
     logging.info("====================================================================")
     logging.info(f"Initialize data collator strategy ({mask_strategy})")
     # Initialize and demonstrate Data Collator
 
-    data_collator = initialize_data_collator(
-        mask_strategy, tokenizer, 'importance_weight'
-    )
+    if mask_strategy != 'default':
+        data_collator = DataCollatorForTermSpecificMasking(
+            tokenizer=tokenizer,
+            return_tensors="pt",
+            score_column='importance_weight',
+            # mask_choice_strategy=mask_choice
+        )
+    else:
+        data_collator = DataCollatorForWholeWordMask(
+            tokenizer=tokenizer,
+            return_tensors="pt",
+        )
 
     logging.info("====================================================================")
     logging.info(f"Tokenizing")
@@ -203,11 +211,9 @@ def main():
         )
         logging.info(f'Cacheing to {cache_fn_tokenize[split]}')
 
-
     # =================================================================
     # Computing word importance scores
     # =================================================================
-
 
     if mask_strategy != 'default':
 
@@ -240,43 +246,45 @@ def main():
         logging.info(tokenizer.convert_ids_to_tokens(fst_row['input_ids'][:20]))
         logging.info(fst_row['reconstructed_words'][:10])
 
+
+        logging.info("====================================================================")
+        logging.info("Fitting masking strategy")
+        scoring_function_args = {
+            'docs': doc_generator(tokenized_datasets['train'], 'reconstructed_words'),
+            'cache_file_prefix': cache_fn_scoring_prefix,
+            'load_from_cache_file': load_from_cache_file
+        }
+
         if mask_strategy == 'tfidf':
-            logging.info("====================================================================")
-            logging.info(f"Fitting tf-idf matrix")
-            score_token = create_tfidfscoring_function(
-                doc_generator(tokenized_datasets['train'], 'reconstructed_words'),
-                cache_file=cache_fn_tfidf,
-                load_from_cache_file=load_from_cache_file,
-            )
+            scoring = TfIdfScoring(**scoring_function_args)
+
         elif mask_strategy == 'idf':
-            logging.info("====================================================================")
-            logging.info(f"Fitting tf-idf matrix")
-            score_token = create_idfscoring_function(
-                doc_generator(tokenized_datasets['train'], 'reconstructed_words'),
-                cache_file=cache_fn_tfidf,
-                load_from_cache_file=load_from_cache_file,
-            )
+            scoring = IdfScoring(**scoring_function_args)
+
+        elif mask_strategy == 'metadiscourse':
+            scoring = MetaDiscourseScoring(**scoring_function_args)
+
         elif mask_strategy == 'term':
-            logging.info("====================================================================")
-            logging.info(f"Loading terms from {term_path}")
-            score_token = create_termscoring_function(term_path)
+            scoring_function_args['term_path'] = term_path
+            scoring = TermScoring(**scoring_function_args)
 
         logging.info('Example of importance weights:')
         fst_row = tokenized_datasets['train'][0]
         logging.info(fst_row['reconstructed_words'][:10])
-        logging.info(score_token(fst_row['reconstructed_words'][:10]))
+        logging.info(scoring.score_sequence(fst_row['reconstructed_words'][:10]))
 
         logging.info("====================================================================")
         logging.info("Compute importance weights according to masking strategy")
 
-        def compute_token_importance(example, score_token):
-            example['importance_weight'] = score_token(example['reconstructed_words'], normalize=False)
+        def compute_token_importance(example, score_tokens):
+            # The normalization will occur at masking time
+            example['importance_weight'] = score_tokens(example.pop('reconstructed_words'), normalize=False)
             return example
 
         # Compute words masking weights (stored in 'importance_weights')
         for split in tokenized_datasets.keys():
             tokenized_datasets[split] = tokenized_datasets[split].map(
-                lambda examples: apply_to_batch(compute_token_importance, examples, kwargs_fct={'score_token': score_token}),
+                lambda examples: apply_to_batch(compute_token_importance, examples, kwargs_fct={'score_tokens': scoring.score_sequence}),
                 batched=True,
                 num_proc=num_workers,
                 remove_columns=['reconstructed_words'],
@@ -313,41 +321,5 @@ def main():
     )
 
 
-    # for split, dataset in tokenized_datasets.items():
-    #     dataset.save_to_disk(cache_fn_word_import_split[split])
-
-    # tokenized_datasets.save_to_disk(cache_fn_word_import_split)
-
-    # Example output
-    logging.info("====================================================================")
-    logging.info("Example of loaded document")
-    logging.info("====================================================================")
-    logging.info(tokenizer.decode(tokenized_datasets["train"][0]["input_ids"]))
-    logging.info(tokenizer.decode(tokenized_datasets["train"][1]["input_ids"]))
-
-    import random
-
-    # Définir un seed pour la reproductibilité
-    # Définir un seed pour la reproductibilité
-    seed_value = 42
-
-    # Mélanger le dataset
-    shuffled_dataset = tokenized_datasets['train'].shuffle(seed=seed_value)
-
-    # Répéter le processus de mélange si nécessaire
-    for _ in range(2):  # Répéter deux fois de plus pour un total de trois mélanges
-        shuffled_dataset = shuffled_dataset.shuffle(seed=seed_value)
-
-    logging.info("====================================================================")
-    logging.info("Shuffle documents")
-    logging.info("====================================================================")
-    logging.info(tokenizer.decode(shuffled_dataset[0]["input_ids"]))
-    logging.info(tokenizer.decode(shuffled_dataset[1]["input_ids"]))
-    logging.info("====================================================================")
-    logging.info("End Preprocessing")
-    logging.info("====================================================================")
- 
-
 if __name__ == "__main__":
     main()
-

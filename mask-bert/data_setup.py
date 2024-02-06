@@ -4,14 +4,13 @@ import logging
 
 from datasets import Dataset
 
-def load_custom_dataset(data_dir, num_examples=None):
 
+def load_dataset(data_dir, num_examples=None):
     if num_examples is not None:
         logging.warning(f"Loading only {num_examples} examples, this is not expected for training/testing.")
 
     # ... [Existing function code remains unchanged]
     def load_dataset_from_json(file_path):
-        #try:
         with open(file_path, 'r') as file:
             if num_examples is None:
                 data_list = [json.loads(line) for line in file]
@@ -37,9 +36,7 @@ def load_custom_dataset(data_dir, num_examples=None):
             logging.error(f"No data loaded for {split}.")
         else:
             logging.info(f"{len(dataset)} examples loaded.")
-        
 
         dataset_dict[split] = dataset
 
     return dataset_dict
-

@@ -1,6 +1,5 @@
 # ====
 # From https://github.com/huggingface/transformers/blob/514de24abfd4416aeba6a6455ad5920f57f3567d/src/transformers/data/data_collator.py#L946
-import random
 import logging
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, NewType, Optional, Tuple, Union, Mapping
@@ -10,6 +9,18 @@ from transformers import BertTokenizer, BertTokenizerFast, DataCollatorForWholeW
 from transformers import RobertaTokenizer, RobertaTokenizerFast
 from transformers import XLMRobertaTokenizer, XLMRobertaTokenizerFast
 from transformers import HerbertTokenizer, HerbertTokenizerFast
+
+
+def demonstrate_data_collator(data_collator, tokenized_datasets, tokenizer, num_examples=2):
+    samples = [tokenized_datasets[i] for i in range(min(num_examples, len(tokenized_datasets)))]
+
+    logging.info("====================================================================")
+    logging.info("Example of masked document")
+    logging.info("====================================================================")
+
+    for s in samples:
+        chunk = data_collator([s])["input_ids"][0]
+        logging.info(f"{tokenizer.decode(chunk)}")
 
 
 def _torch_collate_batch(examples, tokenizer, pad_to_multiple_of: Optional[int] = None):

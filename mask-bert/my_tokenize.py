@@ -1,17 +1,16 @@
 # my_tokenize.py
 import re
-import logging
 
-from transformers import AutoModelForMaskedLM, AutoTokenizer
+from transformers import AutoTokenizer
 from transformers import BertTokenizer, BertTokenizerFast
 from transformers import RobertaTokenizer, RobertaTokenizerFast
 from transformers import XLMRobertaTokenizer, XLMRobertaTokenizerFast
+
 
 def initialize_tokenizer(model_checkpoint="models/bert-base-uncased"):
     return AutoTokenizer.from_pretrained(model_checkpoint)
 
 
-# my_tokenizer.py
 def tokenize_function(tokenizer, examples):
 
     txt = examples["text"]
