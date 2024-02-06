@@ -3,9 +3,10 @@ import random
 import logging
 import argparse
 import datetime
+from glob import glob
 
 from my_tokenize import initialize_tokenizer
-from custom_data_collator import demonstrate_data_collator
+from custom_data_collator import demonstrate_data_collator, DataCollatorForWholeWordMask, DataCollatorForTermSpecificMasking
 from scoring_functions import masking_strategies
 
 from model_trainer import initialize_model_and_trainer, downsample_dataset, train_and_evaluate
@@ -16,7 +17,7 @@ import torch.distributed as dist
 
 import datasets
 from datasets import load_from_disk
-from datasets import Dataset
+from datasets import Dataset, concatenate_datasets
 from datasets import load_dataset
 
 splits = ["train", "validation", "test"]
@@ -144,7 +145,10 @@ def main():
 
     tokenized_datasets = {}
     for split, cache_dir in full_path.items():
-        tokenized_datasets[split] = Dataset.from_file(cache_dir) #Dataset.load_from_disk(cache_dir)
+        paths = sorted(glob(cache_dir.replace('.arrow', '*')))
+        tmp = concatenate_datasets([Dataset.from_file(p) for p in paths])
+        tokenized_datasets[split] = tmp
+        # tokenized_datasets[split] = Dataset.from_file(cache_dir)
 
 
     logging.info("====================================================================")

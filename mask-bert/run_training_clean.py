@@ -1,8 +1,9 @@
 import os
 import logging
 import argparse
+from glob import glob
 
-from datasets import Dataset
+from datasets import Dataset, concatenate_datasets
 
 from my_tokenize import initialize_tokenizer
 from custom_data_collator import (
@@ -44,11 +45,11 @@ def main():
         parser.add_argument("--num-epochs", type=int, default=3, help="Number of training epochs (default: 3)")
         parser.add_argument("--jean-zay-config", type=str, default="1", help="Configuration de jeanzay (node, gpu...)")
 
-        parser.add_argument("--no-distributed", action='store_false', help="Do not use distributed training.")
+        parser.add_argument("--no-distributed", action='store_true', help="Do not use distributed training.")
 
         parser.add_argument("--mask-choice", type=str, choices=['weighted_random', 'top_n'], default=None, help="How to choose which token to mask according to the importance score (default: weighted_random)")
 
-        parser.add_argument("--output-dir", type=str, default=None, help="Directory to save model's checkpoints (default: models/{model_name}-e{num_epochs}-b{batch_size}-{mask_strategy})")
+        parser.add_argument("--output-dir", type=str, default='./models', help="Directory to save model's checkpoints (default: models/{model_name}-e{num_epochs}-b{batch_size}-{mask_strategy})")
 
         return parser.parse_args()
     # =============================================================================
@@ -100,10 +101,7 @@ def main():
         mask_strat_for_cache += '_' + os.path.basename('.'.join(term_path.split('.')[:-1]))
 
     model_name = model_checkpoint.split("/")[-1]
-    if args.output_dir:
-        output_dir = f"{args.output_dir}/{model_name}-jz{jean_zay_config}-e{num_epochs}-b{batch_size}-c{chunk_size}-{mask_strat_for_cache}-ex{num_example if num_example else 'all'}"
-    else:
-        output_dir = f"models/{model_name}-jz{jean_zay_config}-e{num_epochs}-b{batch_size}-c{chunk_size}-{mask_strat_for_cache}-ex{num_example if num_example else 'all'}"
+    output_dir = f"{args.output_dir}/{model_name}-jz{jean_zay_config}-e{num_epochs}-b{batch_size}-c{chunk_size}-{mask_strat_for_cache}-ex{num_example if num_example else 'all'}"
 
     if not os.path.exists(f"{output_dir}/runs"):
         os.makedirs(f"{output_dir}/runs", exist_ok=True)
@@ -128,7 +126,7 @@ def main():
     )
 
     # =================================================================
-    # Pre processing data
+    # Loading and shuffling data
     # =================================================================
 
     tokenizer = initialize_tokenizer(model_checkpoint=model_checkpoint)
@@ -136,8 +134,10 @@ def main():
     tokenized_datasets = {}
     if data_dir is not None:
         for split in splits:
-            path = f"{data_dir}/tokenization-split/{model_name}-{mask_strat_for_cache}-c{chunk_size}-ex{num_example if num_example else 'all'}-{split}.arrow"
-            tokenized_datasets[split] = Dataset.from_file(path)
+            # From https://discuss.huggingface.co/t/solved-how-to-load-multiple-arrow-files-into-one-dataset/49286/4
+            path = f"{data_dir}/tokenization-split/{model_name}-{mask_strat_for_cache}-c{chunk_size}-ex{num_example if num_example else 'all'}-{split}*.arrow"
+            paths = sorted(glob(path))
+            tokenized_datasets[split] = concatenate_datasets([Dataset.from_file(p) for p in paths])
 
     logging.info("====================================================================")
     logging.info("Example of loaded document")
@@ -183,7 +183,7 @@ def main():
     logging.info("====================================================================")
 
     logging.info("====================================================================")
-    logging.info("Shuffle documents")
+    logging.info("Shuffled documents")
     logging.info("====================================================================")
     logging.info(tokenizer.decode(tokenized_datasets["train"][0]["input_ids"]))
     logging.info(tokenizer.decode(tokenized_datasets["train"][1]["input_ids"]))
