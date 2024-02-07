@@ -267,10 +267,8 @@ class DataCollatorForTermSpecificMasking(DataCollatorForWholeWordMask):
         # =================
         # Custom masking choice strategy
         if self.mask_choice_strategy == 'weighted_random':
-            logging.info('Using weighted_random')
             to_mask = self.weighted_random_method(word_importance_scores)
         elif self.mask_choice_strategy == 'top_n':
-            logging.info('Using top_n')
             to_mask = self.top_n_method(word_importance_scores)
         else:
             raise ArgumentError(f'No mask choice strategy named: {self.mask_choice_strategy}')

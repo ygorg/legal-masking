@@ -104,14 +104,16 @@ class MetaDiscourseScoring(ScoringFunction):
         self.word2score = None
         self.phrase_model = None
 
-        logging.info(f'Loading all files (this could take a while with a lot of documents (>100_000))')
-        docs = list(docs)
+        if self.load_from_cache_file is False or self.cache_file_phrasemodel is None or not os.path.exists(self.cache_file_phrasemodel):    
+            logging.info(f'Loading all files (this could take a while with a lot of documents (>100_000))')
+            docs = list(docs)
+
         self._fit_or_load_phrasemodel(docs)
         self._fit_or_load_word2score(docs)
 
     def _fit_or_load_phrasemodel(self, docs):
         from gensim.models.phrases import Phrases, ENGLISH_CONNECTOR_WORDS
-
+ 
         if self.load_from_cache_file is True and self.cache_file_phrasemodel is not None and os.path.exists(self.cache_file_phrasemodel):
             logging.info(f"Using cached phrase model from {self.cache_file_phrasemodel}")
             self.phrase_model = Phrases(
