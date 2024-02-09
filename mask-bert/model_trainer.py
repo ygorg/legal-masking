@@ -33,7 +33,7 @@ def initialize_model_and_trainer(
         output_dir=output_dir,  # Specify the output directory
         evaluation_strategy="epoch",
         save_strategy = "epoch",
-        logging_steps = 500,
+        logging_steps = 50,
         logging_dir = logging_dir,
         log_level='info',
         save_total_limit = 20,
@@ -46,7 +46,7 @@ def initialize_model_and_trainer(
         report_to="tensorboard",
         push_to_hub=False,  # Set to False unless you also want to push to Hugging Face's Model Hub
         fp16=True, # when we use cuda
-        gradient_accumulation_steps = 1,
+        gradient_accumulation_steps = 16,
         # logging_steps=logging_steps,
         remove_unused_columns=False,  # In order to keep importance_weight column
         use_mps_device=str(model.device).startswith('mps')  # For MacOS
