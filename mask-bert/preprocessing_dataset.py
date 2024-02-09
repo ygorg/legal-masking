@@ -1,20 +1,19 @@
 import os
 import logging
 import argparse
-import os
 from my_tokenize import initialize_tokenizer
 from my_tokenize import tokenize_function, group_texts
-from data_setup import load_custom_dataset
-from custom_data_collator import DataCollatorForTermSpecificMasking, DataCollatorForWholeWordMask
-from data_collator_setup import (
-    TfIdfScoring, IdfScoring, MetaDiscourseScoring, TermScoring,
+import data_setup
+from custom_data_collator import (
+    DataCollatorForTermSpecificMasking,
+    DataCollatorForWholeWordMask,
     demonstrate_data_collator
 )
-from model_trainer import initialize_model_and_trainer, downsample_dataset, train_and_evaluate
+from scoring_functions import (
+    TfIdfScoring, IdfScoring, MetaDiscourseScoring,
+    TermScoring, masking_strategies
+)
 
-masking_strategies = {
-    'tfidf': TfIdfScoring, 'idf': IdfScoring, 'metadiscourse': MetaDiscourseScoring, 'term': TermScoring, 'default': None
-}
 
 def doc_generator(dataset, column_name, batch_size=10000):
     # HG datasets are always on the hard drive, and are in memory on
@@ -25,16 +24,17 @@ def doc_generator(dataset, column_name, batch_size=10000):
     #  documents at a time.
 
     for i, batch in enumerate(dataset.iter(batch_size)):
-        logging.info(f'Loaded {batch_size * (i+1)} documents of {len(dataset)}')
+        logging.info(f'Loaded {batch_size * (i + 1)} documents of {len(dataset)}')
         for doc in batch[column_name]:
             yield doc
 
 
 def apply_to_batch(fct, batch, kwargs_fct={}):
     """Apply a function that deals with only one example to a batch
-    
+
     Args:
-        fct (Callable[dict[str, Any] -> dict[str, Any]]): takes a row of a datasets.Dataset and returns a new row
+        fct (Callable[dict[str, Any] -> dict[str, Any]]): takes a row
+            of a datasets.Dataset and returns a new row
         batch (dict[str, list[Any]]): a batch of examples
         kwargs_fct (dict[str, Any]): arguments for `fct`
     Returns:
@@ -63,64 +63,75 @@ def main():
         # =============================================================================
         parser = argparse.ArgumentParser(description="Run the model training and evaluation")
         parser.add_argument("--data-path", type=str, default="./data", help="Path to data (a directory containing {test, train, validation}.json (default: ./data)")
-        parser.add_argument("--model-checkpoint", type=str, default="bert-base-uncased", help="Model name (or path) of huggingface model (default: bert-base-uncased)")
+        parser.add_argument("--num-example", type=int, default=None, help="Number of example to load (for debugging purposes) (default: all)")
 
-        parser.add_argument("--batch-size", type=int, default=16, help="Training/Evaluation batch size (default: 16)")
-        parser.add_argument("--num-epochs", type=int, default=3, help="Number of training epochs (default: 3)")
-        parser.add_argument("--chunk-size", type=int, default=128, help="Split the documents into sequences of X tokens (default: 128)")
+        parser.add_argument("--model-checkpoint", type=str, default="bert-base-uncased", help="Model name (or path) of huggingface model (default: bert-base-uncased)")
 
         parser.add_argument("--mask-strategy", type=str, choices=masking_strategies, default='weighted_random', help="Scoring function to use for masking tokens (default: default)")
         parser.add_argument("--term-path", type=str, default=None, help="Path to list of terms (one term per line)")
-        parser.add_argument("--mask-choice", type=str, choices=['weighted_random', 'top_n'], default=None, help="How to choose which token to mask according to the importance score (default: weighted_random)")
+
+        parser.add_argument("--chunk-size", type=int, default=128, help="Split the documents into sequences of X tokens (default: 128)")
 
         parser.add_argument("--cache-dir", type=str, default=None, help="Directory to cache pretreatments (default: no cache)")
         parser.add_argument("--load-from-cache-file", choices=['true', 'false'], default='true', help="If False force recompute the cache (default: true)")
         parser.add_argument("--num-workers", type=int, default=1, help="Number of processes to use for pretreating data (default: 1)")
-        parser.add_argument("--output-dir", type=str, default=None, help="Directory to save model's checkpoints (default: models/{model_name}-e{num_epochs}-b{batch_size}-{mask_strategy})")
-        parser.add_argument("--num-example", type=int, default=None, help="Number of example to load (for debugging purposes) (default: all)")
 
-        # parser.add_argument("--logging_steps", type=int, default=50, help="Logging steps")
-        # 
-        # Parse arguments
+        # Training arguments
+        # parser.add_argument("--batch-size", type=int, default=32, help="Training/Evaluation batch size (default: 32)")
+        # parser.add_argument("--num-epochs", type=int, default=3, help="Number of training epochs (default: 3)")
+        # parser.add_argument("--jean-zay-config", type=str, default="1", help="Configuration de jeanzay (node, gpu...)")
+
+        # parser.add_argument("--mask-choice", type=str, choices=['weighted_random', 'top_n'], default=None, help="How to choose which token to mask according to the importance score (default: weighted_random)")
+
+        # parser.add_argument("--output-dir", type=str, default=None, help="Directory to save model's checkpoints (default: models/{model_name}-e{num_epochs}-b{batch_size}-{mask_strategy})")
+
         return parser.parse_args()
     # =============================================================================
 
     args = arguments()
 
     data_dir = args.data_path  # Specify your data directory
-    model_checkpoint = args.model_checkpoint
-    # version = args.version
-
-    num_epochs = args.num_epochs
     num_example = args.num_example
-    mask_strategy = args.mask_strategy
-    mask_choice = args.mask_choice
-    batch_size = args.batch_size
 
+    model_checkpoint = args.model_checkpoint
+
+    mask_strategy = args.mask_strategy
     term_path = args.term_path
+
+    chunk_size = args.chunk_size  # Split the documents every CHUNK_SIZE tokens
+
     cache_dir = args.cache_dir
     load_from_cache_file = True if args.load_from_cache_file == 'true' else False
     num_workers = args.num_workers
 
+    # batch_size = args.batch_size
+    # num_epochs = args.num_epochs
+    # jean_zay_config = args.jean_zay_config
+
+    # mask_choice = args.mask_choice
+
+    # output_dir = args.output_dir
+
     if mask_strategy != 'term':
         term_path = None
-    if mask_strategy == 'term' and term_path == None:
+    if mask_strategy == 'term' and term_path is None:
         raise Exception('Masking strategy is "term" but not term list provided. Please provide a file to --term-path.')
-
-    chunk_size = args.chunk_size  # Split the documents every CHUNK_SIZE tokens
-
 
     # Name of the masking strategy with the name of the term used if any
     mask_strat_for_cache = f'{mask_strategy}'
     if term_path is not None:
         mask_strat_for_cache += '_' + os.path.basename('.'.join(term_path.split('.')[:-1]))
 
+    # If we are on JeanZay, the model might already be downloaded at $DSDIR/HuggingFace_models
+    if 'DSDIR' in os.environ:
+        JZ_CACHED_MODEL = os.path.join(os.environ['DSDIR'], 'HuggingFace_Models', model_checkpoint)
+        if os.path.exists(JZ_CACHED_MODEL):
+            logging.info(f"Using {model_checkpoint} from Jean-Zay at {JZ_CACHED_MODEL}")
+            model_checkpoint = JZ_CACHED_MODEL
+
+    tokenizer = initialize_tokenizer(model_checkpoint=model_checkpoint)
 
     model_name = model_checkpoint.split("/")[-1]
-    if args.output_dir:
-        output_dir = args.output_dir
-    else:
-        output_dir = f"../saved_models/{model_name}-e{num_epochs}-b{batch_size}-c{chunk_size}-{mask_strat_for_cache}-ex{num_example if num_example else 'all'}"
 
     stream_handler = logging.StreamHandler()
     stream_handler.setLevel(logging.INFO)
@@ -137,7 +148,7 @@ def main():
     # =================================================================
     # Pre processing data
     # =================================================================
-    datasets = load_custom_dataset(data_dir, num_example)
+    datasets = data_setup.load_dataset(data_dir, num_example)
 
     tokenizer = initialize_tokenizer(model_checkpoint=model_checkpoint)
 
@@ -169,8 +180,6 @@ def main():
         cache_fn_word_import = {split: None for split in datasets.keys()}
         cache_fn_word_import_split = {split: None for split in datasets.keys()}
 
-
-
     logging.info("====================================================================")
     logging.info(f"Initialize data collator strategy ({mask_strategy})")
     # Initialize and demonstrate Data Collator
@@ -180,7 +189,7 @@ def main():
             tokenizer=tokenizer,
             return_tensors="pt",
             score_column='importance_weight',
-            mask_choice_strategy=mask_choice
+            # mask_choice_strategy=mask_choice
         )
     else:
         data_collator = DataCollatorForWholeWordMask(
@@ -202,11 +211,9 @@ def main():
         )
         logging.info(f'Cacheing to {cache_fn_tokenize[split]}')
 
-
     # =================================================================
     # Computing word importance scores
     # =================================================================
-
 
     if mask_strategy != 'default':
 
@@ -313,30 +320,6 @@ def main():
         tokenizer, num_examples=3
     )
 
-    # Example output
-    logging.info("====================================================================")
-    logging.info("Example of loaded document")
-    logging.info("====================================================================")
-    logging.info(tokenizer.decode(tokenized_datasets["train"][0]["input_ids"]))
-    logging.info(tokenizer.decode(tokenized_datasets["train"][1]["input_ids"]))
-
-
-    # =================================================================
-    # Training model
-    # =================================================================
-    # Initialize the trainer with the model, datasets, data collator, and command line parameters
-    trainer = initialize_model_and_trainer(
-        tokenized_datasets, 
-        data_collator, 
-        tokenizer, 
-        model_checkpoint=model_checkpoint, 
-        batch_size=batch_size, 
-        num_epochs=num_epochs,
-        output_dir=output_dir
-    )
-    # Add training code here if needed
-    eval_results = train_and_evaluate(trainer)
 
 if __name__ == "__main__":
     main()
-
