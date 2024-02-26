@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo-selective-masking.jpg" alt="Project Logo" width="200"/>
+  <img src="logo-selective-masking.jpg" alt="Project Logo" width="400"/>
 </p>
 
 # Language Model Adaptation to Specialized Domains through Selective Masking based on Genre and Topical Characteristics 
