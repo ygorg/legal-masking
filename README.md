@@ -1,3 +1,46 @@
+<p align="center">
+  <img src="logo-selective-masking.jpg" alt="Project Logo" width="300"/>
+</p>
+
+# Language Model Adaptation to Specialized Domains through Selective Masking based on Genre and Topical Characteristics 
+
+Recent advances in pre-trained language modeling have facilitated significant progress across various natural language processing (NLP) tasks. Word masking during model training constitutes a pivotal component of language modeling in architectures like BERT. However, the prevalent method of word masking relies on random selection, potentially disregarding domain-specific linguistic attributes. In this article, we introduce an innovative masking approach leveraging genre and topicality information to tailor language models to specialized domains. Our method incorporates a ranking process that prioritizes words based on their significance, subsequently guiding the masking procedure. Experiments conducted using continual pre-training within the legal domain have underscored the efficacy of our approach on the LegalGLUE benchmark in the English language.
+
+## Dataset Overview
+
+### Training Corpus
+
+This project utilizes a subset of the LeXFiles, a groundbreaking English multinational legal corpus. The LeXFiles encompasses a comprehensive collection of legal texts, featuring approximately 19 billion tokens across 11 distinct sub-corpora. It covers legislation and case law from six major English-speaking legal systems: the European Union (EU), the Council of Europe (CoE), Canada, the United States (US), the United Kingdom (UK), and India.
+
+### Objectives
+
+Our aim was to create a balanced representation of these legal systems while managing computational resources effectively. To this end, our training corpus, derived from the LeXFiles, includes carefully selected sub-corpora, emphasizing four legal systems:
+
+- European Union: EU Court Decisions
+- Council of Europe: ECtHR Decisions
+- India: Indian Court Decisions
+- United States: A representative corpus extracted from Kaggle, courtesy of Garrett Fiddler
+
+The final training corpus is approximately 4 GB, optimized for legal linguistic research and AI applications in the legal domain.
+
+### Evaluation Strategy
+
+**Masking Strategy Evaluation:** Our evaluation employs a probing benchmark with 8 sub-tasks, designed to assess the depth of legal knowledge in Pretrained Language Models (PLMs). This benchmark spans across all legal systems included in our training, providing a comprehensive evaluation of the PLMs.
+
+**Legal Task Evaluation:** We utilize the LexGLUE benchmark, a robust assessment based on seven existing legal NLP datasets. LexGLUE is modeled after the criteria used in SuperGLUE and focuses on European and US legal systems. To extend our evaluation to the Indian legal system, we incorporated the LegalEval tasks, enriching our benchmark's scope.
+
+## Installation and Setup
+
+```bash
+# Installation instructions
+
+
+
+
+
+
+
+
 
 <!--
 <p align="center">
