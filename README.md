@@ -56,7 +56,13 @@ for EXP_SCRIPT in scripts/run*.sh ; do
 done
 ```
 
+## Credits
 
+[If applicable, acknowledge any collaborators, contributors, or sources of third-party assets.]
+
+## License
+
+[Specify the licensing details for your project. Choose an appropriate license at choosealicense.com if necessary.]
 
 
 
