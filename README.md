@@ -1,4 +1,4 @@
-![Project Logo](logo-selective -masking.jpg)
+![Project Logo](logo-selective-masking.jpg)
 
 # Language Model Adaptation to Specialized Domains through Selective Masking based on Genre and Topical Characteristics 
 
