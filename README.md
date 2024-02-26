@@ -29,16 +29,37 @@ We utilize the LexGLUE benchmark, a robust assessment based on seven existing le
 
 ## Installation and Setup
 
+### Continuous Fine-tuning
 ```bash
-# Installation instructions
+cd mask-bert
+python3 main.py --data-path /home/belfathi/mask-bert/data --mask-strategy default --num-epochs 4
+```
+### LexGLUE Evaluation
 
+#### Load Data
+
+```python
 import datasets
 
 for c in ['case_hold', 'ledgar', 'eurlex', 'ecthr_b', 'ecthr_a', 'scotus', 'unfair_tos']:
     datasets.load_dataset('lex_glue', c)
+```
 
-for c in ['canadian_crimes', 'canadian_sections', 'cjeu_terms', 'ecthr_terms', 'ecthr_articles', 'us_crimes', 'us_terms', 'contract_types', 'contract_sections']:
-    datasets.load_dataset('lexlms/legal_lama', c)
+#### Run Scripts
+```bash
+git clone --branch update_scripts https://github.com/ygorg/lex-glue
+cd lex-glue
+model=../mask-bert/models/bert-base-uncased-e4-b16-default-DEBUG1000/checkpoint-7500
+gpu=0
+for EXP_SCRIPT in scripts/run*.sh ; do
+    PYTHONPATH="." $EXP_SCRIPT ${model} ${gpu}
+done
+```
+
+
+
+
+
 
 
 
