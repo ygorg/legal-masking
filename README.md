@@ -59,7 +59,7 @@ done
 ## Results
 
 <p align="center">
-  <img src="results.png" alt="Project Logo" width="300"/>
+  <img src="results.png" alt="Project Logo" width="500"/>
 </p>
 
 
