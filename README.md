@@ -1,3 +1,5 @@
+
+<!--
 <p align="center">
   <img src="logo-selective-masking.jpg" alt="Project Logo" width="300"/>
 </p>
@@ -104,3 +106,4 @@ gpu=0  # same usage as CUDA_VISIBLE_DEVICES
 for EXP_SCRIPT in scripts/run*.sh ; do
 	PYTHONPATH="." $EXP_SCRIPT ${model} ${gpu}
 ```
+-->
