@@ -25,14 +25,20 @@ The final training corpus is approximately 4 GB, optimized for legal linguistic 
 
 ### Evaluation Strategy
 
-**Masking Strategy Evaluation:** Our evaluation employs a probing benchmark with 8 sub-tasks, designed to assess the depth of legal knowledge in Pretrained Language Models (PLMs). This benchmark spans across all legal systems included in our training, providing a comprehensive evaluation of the PLMs.
-
-**Legal Task Evaluation:** We utilize the LexGLUE benchmark, a robust assessment based on seven existing legal NLP datasets. LexGLUE is modeled after the criteria used in SuperGLUE and focuses on European and US legal systems. To extend our evaluation to the Indian legal system, we incorporated the LegalEval tasks, enriching our benchmark's scope.
+We utilize the LexGLUE benchmark, a robust assessment based on seven existing legal NLP datasets. LexGLUE is modeled after the criteria used in SuperGLUE and focuses on European and US legal systems. To extend our evaluation to the Indian legal system, we incorporated the LegalEval tasks, enriching our benchmark's scope.
 
 ## Installation and Setup
 
 ```bash
 # Installation instructions
+
+import datasets
+
+for c in ['case_hold', 'ledgar', 'eurlex', 'ecthr_b', 'ecthr_a', 'scotus', 'unfair_tos']:
+    datasets.load_dataset('lex_glue', c)
+
+for c in ['canadian_crimes', 'canadian_sections', 'cjeu_terms', 'ecthr_terms', 'ecthr_articles', 'us_crimes', 'us_terms', 'contract_types', 'contract_sections']:
+    datasets.load_dataset('lexlms/legal_lama', c)
 
 
 
