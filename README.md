@@ -4,7 +4,11 @@
 
 # Language Model Adaptation to Specialized Domains through Selective Masking based on Genre and Topical Characteristics 
 
-Instead of randomly masking words for the MLM (maked language modeling) objective in BERT-like models, we mask "important" words for the domain (terms), document (keywords), genre (meta-discourse).
+Recent advances in pre-trained language modeling have facilitated significant progress across various natural language processing (NLP) tasks. Word masking during model training constitutes a pivotal component of language modeling in architectures like BERT. However, the prevalent method of word masking relies on random selection, potentially disregarding domain-specific linguistic attributes. In this article, we introduce an innovative masking approach leveraging genre and topicality information to tailor language models to specialized domains. Our method incorporates a ranking process that prioritizes words based on their significance, subsequently guiding the masking procedure. Experiments conducted using continual pre-training within the legal domain have underscored the efficacy of our approach on the LegalGLUE benchmark in the English language. Pre-trained language models and code are freely available for use.
+
+
+
+%Instead of randomly masking words for the MLM (maked language modeling) objective in BERT-like models, we mask "important" words for the domain (terms), document (keywords), genre (meta-%discourse).
 
 ```python
 # Download all datasets in a cache then put them in the remote location
