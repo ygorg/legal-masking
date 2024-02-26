@@ -56,6 +56,13 @@ for EXP_SCRIPT in scripts/run*.sh ; do
 done
 ```
 
+## Results
+
+<p align="center">
+  <img src="results.png" alt="Project Logo" width="300"/>
+</p>
+
+
 ## Credits
 
 [If applicable, acknowledge any collaborators, contributors, or sources of third-party assets.]
