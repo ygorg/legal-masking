@@ -123,6 +123,7 @@ This research was funded, in whole or in part, by l'Agence Nationale de la Reche
 
 ## Citation
 
+```
 @misc{belfathi2024language,
       title={Language Model Adaptation to Specialized Domains through Selective Masking based on Genre and Topical Characteristics}, 
       author={Anas Belfathi and Ygor Gallina and Nicolas Hernandez and Richard Dufour and Laura Monceaux},
@@ -132,3 +133,4 @@ This research was funded, in whole or in part, by l'Agence Nationale de la Reche
       archivePrefix={arXiv},
       primaryClass={cs.CL}
 }
+```
