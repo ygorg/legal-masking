@@ -13,8 +13,10 @@
 
 module purge
 module load pytorch-gpu/py3/2.1.1
+
 set -x
-MODEL_NAME="../../continued_pretraining/models/legal-bert-base-uncased-jz2-2-4-e10-b16-c512-metadiscourse-weighted_random-exall/checkpoint-3297"
+
+MODEL_NAME="../../continuous-pretraining/models/legal-bert-base-uncased-jz2-2-4-e10-b16-c512-metadiscourse-weighted_random-exall/checkpoint-3297"
 MODEL_BASE_NAME="legal-bert-random-weighted"
 CACHE_DIR="./data"
 LOWER_CASE='True'

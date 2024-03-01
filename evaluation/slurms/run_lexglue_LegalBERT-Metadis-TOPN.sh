@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=Lexglue-benchmark-LegalBERT
-#SBATCH --output=./job_out_err/run_evaluation_legalBERT_%A_%a.out
-#SBATCH --error=./job_out_err/run_evaluation_legalBERT_%A_%a.err
+#SBATCH --job-name=Lexglue-benchmark-LegalBERT-TOP-N
+#SBATCH --output=./job_out_err/run_evaluation_legalBERT_Top_N_%A_%a.out
+#SBATCH --error=./job_out_err/run_evaluation_legalBERT_Top_N_%A_%a.err
 #SBATCH --constraint=v100-32g
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -16,8 +16,8 @@ module load pytorch-gpu/py3/2.1.1
 
 set -x
 
-MODEL_NAME="../../continued_pretraining/models/legal-bert-base-uncased"
-MODEL_BASE_NAME=$(basename $MODEL_NAME)
+MODEL_NAME="../../continuous-pretraining/models/legal-bert-base-uncased-jz2-2-4-e10-b16-c512-metadiscourse-top_n-exall/checkpoint-4396"
+MODEL_BASE_NAME="legal-bert-top-n"
 CACHE_DIR="./data"
 LOWER_CASE='True'
 BATCH_SIZE=16

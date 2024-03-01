@@ -1,13 +1,13 @@
 #!/bin/bash
-#SBATCH --job-name=Lexglue-benchmark
-#SBATCH --output=./job_out_err/run_evaluation_test_%A_%a.out
-#SBATCH --error=./job_out_err/run_evaluation_test_%A_%a.err
+#SBATCH --job-name=Lexglue-benchmark-weighted-random
+#SBATCH --output=./job_out_err/run_evaluation_BERT_RANDOM_Weighted_%A_%a.out
+#SBATCH --error=./job_out_err/run_evaluation_BERT_RANDOM_Weighted_%A_%a.err
 #SBATCH --constraint=v100-32g
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=10
-#SBATCH --time=06:00:00
+#SBATCH --time=20:00:00
 #SBATCH --hint=nomultithread
 #SBATCH --array=1-3%3
 
@@ -16,8 +16,8 @@ module load pytorch-gpu/py3/2.1.1
 
 set -x
 
-MODEL_NAME="../../continued_pretraining/models/bert-base-uncased"
-MODEL_BASE_NAME=$(basename $MODEL_NAME)
+MODEL_NAME="../../continuous-pretraining/models/bert-base-uncased-jz2-2-4-e10-b16-c512-metadiscourse-weighted_random-exall/checkpoint-3340"
+MODEL_BASE_NAME="bert-baseline-random-weighted"
 CACHE_DIR="./data"
 LOWER_CASE='True'
 BATCH_SIZE=16
@@ -26,6 +26,11 @@ REPORT_TO='none'
 SEED=$SLURM_ARRAY_TASK_ID
 
 TASKS=(
+    'ecthr_a'
+    'ecthr_b'
+    'unfair_tos'
+    'eurlex'
+    'ledgar'
     'scotus'
 )
 

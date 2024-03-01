@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=lb_tf_rw
-#SBATCH --output=./job_out_err/run_evaluation_LegalBERT_TFIDF_RW_%A_%a.out
-#SBATCH --error=./job_out_err/run_evaluation_LegalBERT_TFIDF_RW_%A_%a.err
+#SBATCH --job-name=lb_tf_tn
+#SBATCH --output=./job_out_err/run_evaluation_LegalBERT_TFIDF_TOPN_%A_%a.out
+#SBATCH --error=./job_out_err/run_evaluation_LegalBERT_TFIDF_TOPN_%A_%a.err
 #SBATCH --constraint=v100-32g
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -15,8 +15,9 @@ module purge
 module load pytorch-gpu/py3/2.1.1
 
 set -x
-MODEL_NAME="../../continued_pretraining/models/legal-bert-base-uncased-jz4-4-4-e10-b16-c512-default-default-exall/checkpoint-3297"
-MODEL_BASE_NAME="legalbert-tfidf-rw"
+
+MODEL_NAME="../../continuous-pretraining/models/legal-bert-base-uncased-jz4-4-4-e10-b16-c512-default-default-exall/checkpoint-3297"
+MODEL_BASE_NAME="legalbert-tfidf-topn"
 CACHE_DIR="./data"
 LOWER_CASE='True'
 BATCH_SIZE=16

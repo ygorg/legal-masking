@@ -15,7 +15,8 @@ module purge
 module load pytorch-gpu/py3/2.1.1
 
 set -x
-MODEL_NAME="/gpfsscratch/rech/zsl/upt42hk/MetaBERT_ygor/legal-masking/models/bert-base-uncased-jz4-4-4-e10-b16-c512-tfidf-top_n-exall/checkpoint-4453"
+
+MODEL_NAME="../../continuous-pretraining/models/bert-base-uncased-jz4-4-4-e10-b16-c512-tfidf-top_n-exall/checkpoint-4453"
 MODEL_BASE_NAME="bert-tfidf-topn"
 CACHE_DIR="./data"
 LOWER_CASE='True'

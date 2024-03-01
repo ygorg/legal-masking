@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=Lexglue-benchmark-LegalBERT-CFT
-#SBATCH --output=./job_out_err/run_evaluation_legalBERT_CFT_%A_%a.out
-#SBATCH --error=./job_out_err/run_evaluation_legalBERT_CFT_%A_%a.err
+#SBATCH --job-name=Lexglue-benchmark-BERT-TFIDF
+#SBATCH --output=./job_out_err/run_evaluation_BERT_TFIDF_%A_%a.out
+#SBATCH --error=./job_out_err/run_evaluation_BERT_TFIDF_%A_%a.err
 #SBATCH --constraint=v100-32g
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -15,8 +15,9 @@ module purge
 module load pytorch-gpu/py3/2.1.1
 
 set -x
-MODEL_NAME="../../continued_pretraining/models/legal-bert-base-uncased-jz4-4-4-e10-b16-c512-default-default-exall/checkpoint-3297"
-MODEL_BASE_NAME="legal-bert-cft"
+
+MODEL_NAME="../../continuous-pretraining/models/bert-base-uncased-jz2-2-4-e10-b16-c512-tfidf-weighted_random-exall/checkpoint-3340"
+MODEL_BASE_NAME="bert-TFIDF"
 CACHE_DIR="./data"
 LOWER_CASE='True'
 BATCH_SIZE=16

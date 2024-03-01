@@ -1,23 +1,23 @@
 #!/bin/bash
-#SBATCH --job-name=b_test
-#SBATCH --output=./job_out_err/run_evaluation_BERT_test_%A_%a.out
-#SBATCH --error=./job_out_err/run_evaluation_BERT_test_%A_%a.err
+#SBATCH --job-name=lb_tf_rw
+#SBATCH --output=./job_out_err/run_evaluation_LegalBERT_TFIDF_RW_%A_%a.out
+#SBATCH --error=./job_out_err/run_evaluation_LegalBERT_TFIDF_RW_%A_%a.err
 #SBATCH --constraint=v100-32g
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=10
-#SBATCH --time=00:10:00
+#SBATCH --time=5:00:00
 #SBATCH --hint=nomultithread
-#SBATCH --account=bvh@v100
-#SBATCH --array=1-18%3
+#SBATCH --array=1-18%18
 
 module purge
 module load pytorch-gpu/py3/2.1.1
 
 set -x
-MODEL_NAME="/gpfsscratch/rech/zsl/upt42hk/MetaBERT_ygor/legal-masking/models/bert-base-uncased-jz4-4-4-e10-b16-c512-tfidf-top_n-exall/checkpoint-4453"
-MODEL_BASE_NAME="bert-testtest"
+
+MODEL_NAME="../../continuous-pretraining/models/legal-bert-base-uncased-jz4-4-4-e10-b16-c512-default-default-exall/checkpoint-3297"
+MODEL_BASE_NAME="legalbert-tfidf-rw"
 CACHE_DIR="./data"
 LOWER_CASE='True'
 BATCH_SIZE=16
