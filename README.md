@@ -1,59 +1,107 @@
-<p align="center">
-  <img src="_assets/logo-selective-masking.jpg" alt="Project Logo" width="300"/>
-</p>
-
 # Language Model Adaptation to Specialized Domains through Selective Masking based on Genre and Topical Characteristics 
+
+<img src="_assets/logo-selective-masking.jpg" align="left" alt="Project Logo" width="250"/>
 
 Recent advances in pre-trained language modeling have facilitated significant progress across various natural language processing (NLP) tasks. Word masking during model training constitutes a pivotal component of language modeling in architectures like BERT. However, the prevalent method of word masking relies on random selection, potentially disregarding domain-specific linguistic attributes. In this article, we introduce an innovative masking approach leveraging genre and topicality information to tailor language models to specialized domains. Our method incorporates a ranking process that prioritizes words based on their significance, subsequently guiding the masking procedure. Experiments conducted using continual pre-training within the legal domain have underscored the efficacy of our approach on the LegalGLUE benchmark in the English language.
 
-## Dataset Overview
 
-### Training Corpus
+**TL;DR** : Instead of randomly masking words for the MLM (masked language modeling) objective in BERT-like models, we mask "important" words for the domain (terms), document (keywords) or genre (meta-discourse).
 
-This project utilizes a subset of the LeXFiles, a groundbreaking English multinational legal corpus. The LeXFiles encompasses a comprehensive collection of legal texts, featuring approximately 19 billion tokens across 11 distinct sub-corpora. It covers legislation and case law from six major English-speaking legal systems: the European Union (EU), the Council of Europe (CoE), Canada, the United States (US), the United Kingdom (UK), and India.
 
-### Objectives
+## Training Corpus
 
-Our aim was to create a balanced representation of these legal systems while managing computational resources effectively. To this end, our training corpus, derived from the LeXFiles, includes carefully selected sub-corpora, emphasizing four legal systems:
+Our aim was to cover all legal systems appearing in the LexGLUE benchmark as well as [LegalEval](https://sites.google.com/view/legaleval/home) and limit the total size of the corpus.
+We chose to limit our dataset to 4GB (similar to [DrBERT](https://aclanthology.org/2023.acl-long.896/)).
 
-- European Union: EU Court Decisions
-- Council of Europe: ECtHR Decisions
-- India: Indian Court Decisions
-- United States: A representative corpus extracted from Kaggle, courtesy of Garrett Fiddler
+We use :
+- a subset of [lexlms/lex_files](https://huggingface.co/datasets/lexlms/lex_files), a diverse English multinational legal corpus. It features $\approx$ 19 billion tokens across 11 distinct sub-corpora. It covers legislation and case law from six major English-speaking legal systems:
+    - the European Union (EU),
+    - the Council of Europe (CoE),
+    - Canada, the United States (US),
+    - the United Kingdom (UK)
+    - and India.
+- the [SCOPUS Opinion](https://www.kaggle.com/datasets/gqfiddler/scotus-opinions) corpus.
 
-The final training corpus is approximately 4 GB, optimized for legal linguistic research and AI applications in the legal domain.
+We selected the following (sub-)corpora, according to their legal systems:
 
-### Evaluation Strategy
+* European Union: EU Court Decisions ([lex_files](https://huggingface.co/datasets/lexlms/lex_files/blob/main/) : `eurlex.zip`)
+* Council of Europe: ECtHR Decisions ([lex_files](https://huggingface.co/datasets/lexlms/lex_files/blob/main/) : `ecthr_cases.zip`)
+* India: Indian Court Decisions ([lex_files](https://huggingface.co/datasets/lexlms/lex_files/blob/main/) : `indian_courts_cases.zip`)
+* United States: SCOTUS Opinion ([gqfiddler/scotus-opinions](https://www.kaggle.com/datasets/gqfiddler/scotus-opinions))
 
-We utilize the LexGLUE benchmark, a robust assessment based on seven existing legal NLP datasets. LexGLUE is modeled after the criteria used in SuperGLUE and focuses on European and US legal systems. To extend our evaluation to the Indian legal system, we incorporated the LegalEval tasks, enriching our benchmark's scope.
+## Continuous-pretraining
 
-## Installation and Setup
-
-### Continuous Fine-tuning
+1. Download models (and their tokenizers)
 ```bash
-cd mask-bert
-python3 main.py --data-path /home/belfathi/mask-bert/data --mask-strategy default --num-epochs 4
+cd continuous-pretraining
+python3 "download_models.py"
 ```
-### LexGLUE Evaluation
-
-#### Load Data
-
-```python
-import datasets
-
-for c in ['case_hold', 'ledgar', 'eurlex', 'ecthr_b', 'ecthr_a', 'scotus', 'unfair_tos']:
-    datasets.load_dataset('lex_glue', c)
-```
-
-#### Run Scripts
+2. Preprocess the corpus (for each scoring (tfidf, metadiscourse) and model)
 ```bash
-git clone --branch update_scripts https://github.com/ygorg/lex-glue
+python3 "preprocessing_dataset.py" \
+    --data-path "corpus" \
+    --model-checkpoint "models/bert-base-uncased" \
+    --mask-strategy tfidf --chunk-size 512 \
+    --cache-dir "cache_dir" --num-workers 8
+```
+3. Run continuous-pretraning
+```bash
+# Using a script (from `continuous-pretraining`)
+python3 "run_training.py" \
+    --data-path "cache_dir" \
+    --model-checkpoint "models/bert-base-uncased" \
+    --mask-strategy tfidf --chunk-size 512 \
+    --batch-size 16 --num-epochs 10 \
+    --mask-choice weighted_random
+
+# or on JeanZay using slurm (from `continuous-pretraining`)
+sbatch slurms/run_training_bert-CFT.sh
+```
+## Evaluation
+
+We use the [LexGLUE](https://github.com/coastalcph/lex-glue) benchmark, a robust assessment based on seven existing legal NLP datasets. LexGLUE is modeled after the criteria used in SuperGLUE and focuses on European and US legal systems. To extend our evaluation to the Indian legal system, we incorporated the LegalEval tasks, enriching our benchmark's scope.
+
+1. Download `lex-glue` and its data
+```bash
+cd evaluation
+sh runme.sh
+```
+2. Run evaluation
+```bash
+# On JeanZay using slurm (from `evaluation/lex-glue`)
 cd lex-glue
-model=../mask-bert/models/bert-base-uncased-e4-b16-default-DEBUG1000/checkpoint-7500
-gpu=0
-for EXP_SCRIPT in scripts/run*.sh ; do
-    PYTHONPATH="." $EXP_SCRIPT ${model} ${gpu}
-done
+sbatch ../slurms/run_lexglue_BERT-TFIDF-RW.sh
+
+# or using a script (from `evaluation/lex-glue`)
+TASK="eurlex"
+MODEL_NAME="../../continuous-pretraining/models/bert-base-uncased-jz2-2-4-e10-b16-c512-tfidf-weighted_random-exall/checkpoint-3340"
+MODEL_BASE_NAME="BERT-TFIDF-RW"
+CACHE_DIR="./data"
+BATCH_SIZE=16
+ACCUMULATION_STEPS=1
+SEED=1
+python experiments/${TASK}.py \
+    --model_name_or_path ${MODEL_NAME} \
+    --task ${TASK} --do_lower_case 'True' \
+    --output_dir logs/${TASK}/${MODEL_BASE_NAME}/seed_${SEED} \
+    --cache_dir ${CACHE_DIR} \
+    --do_train --do_eval --do_pred \
+    --report_to 'none' --overwrite_output_dir \
+    --load_best_model_at_end \
+    --metric_for_best_model micro-f1 --greater_is_better True \
+    --evaluation_strategy epoch --save_strategy epoch \
+    --num_train_epochs 20 --save_total_limit 5 \
+    --learning_rate 3e-5 \
+    --per_device_train_batch_size ${BATCH_SIZE} \
+    --per_device_eval_batch_size ${BATCH_SIZE} \
+    --seed ${SEED} \
+    --fp16 --fp16_full_eval \
+    --gradient_accumulation_steps ${ACCUMULATION_STEPS} \
+    --eval_accumulation_steps ${ACCUMULATION_STEPS}"
+```
+3. Display results
+```bash
+python3 show_results.py --logdir lex-glue/logs
 ```
 
 ## Results
@@ -65,125 +113,22 @@ done
 
 ## Credits
 
-[If applicable, acknowledge any collaborators, contributors, or sources of third-party assets.]
+This work was granted access to the HPC resources of IDRIS under the allocation 2023-AD011014882 made by GENCI.
+
+This research was funded, in whole or in part, by l'Agence Nationale de la Recherche (ANR), project NR-22-CE38-0004.
 
 ## License
 
 [Specify the licensing details for your project. Choose an appropriate license at choosealicense.com if necessary.]
 
+## Citation
 
-
-
-
-
-
-
-
-
-
-
-<!--
-<p align="center">
-  <img src="logo-selective-masking.jpg" alt="Project Logo" width="300"/>
-</p>
-
-# Language Model Adaptation to Specialized Domains through Selective Masking based on Genre and Topical Characteristics 
-
-Recent advances in pre-trained language modeling have facilitated significant progress across various natural language processing (NLP) tasks. Word masking during model training constitutes a pivotal component of language modeling in architectures like BERT. However, the prevalent method of word masking relies on random selection, potentially disregarding domain-specific linguistic attributes. In this article, we introduce an innovative masking approach leveraging genre and topicality information to tailor language models to specialized domains. Our method incorporates a ranking process that prioritizes words based on their significance, subsequently guiding the masking procedure. Experiments conducted using continual pre-training within the legal domain have underscored the efficacy of our approach on the LegalGLUE benchmark in the English language. 
-
-
-```python
-# Download all datasets in a cache then put them in the remote location
-# BASH : export HF_DATASETS_CACHE=/home/gallina/datasets_cache/
-
-for c in ['case_hold', 'ledgar', 'eurlex', 'ecthr_b', 'ecthr_a', 'scotus', 'unfair_tos']:
-	datasets.load_dataset('lex_glue', c)
-
-for c in ['canadian_crimes', 'canadian_sections', 'cjeu_terms', 'ecthr_terms', 'ecthr_articles', 'us_crimes', 'us_terms', 'contract_types', 'contract_sections']:
-	datasets.load_dataset('lexlms/legal_lama', c)
-```
-## Dataset Overview
-
-### Trainning Corpus 
-This project utilizes a subset of the LeXFiles, a groundbreaking English multinational legal corpus. The LeXFiles encompasses a comprehensive collection of legal texts, featuring approximately 19 billion tokens across 11 distinct sub-corpora. It covers legislation and case law from six major English-speaking legal systems: the European Union (EU), the Council of Europe (CoE), Canada, the United States (US), the United Kingdom (UK), and India.
-Objectives
-
-Our aim was to create a balanced representation of these legal systems while managing computational resources effectively. To this end, our training corpus, derived from the LeXFiles, includes carefully selected sub-corpora, emphasizing four legal systems:
-
-* European Union: EU Court Decisions
-* Council of Europe: ECtHR Decisions
-* India: Indian Court Decisions
-* United States: A representative corpus extracted from Kaggle, courtesy of Garrett Fiddler
-
-The final training corpus is approximately 4 GB, optimized for legal linguistic research and AI applications in the legal domain.
-
-
-### Evaluation Strategy
-**Masking Strategy Evaluation**
-
-Our evaluation employs a probing benchmark with 8 sub-tasks, designed to assess the depth of legal knowledge in Pretrained Language Models (PLMs). This benchmark spans across all legal systems included in our training, providing a comprehensive evaluation of the PLMs.
-
-**Legal Task Evaluation**
-
-We utilize the LexGLUE benchmark, a robust assessment based on seven existing legal NLP datasets. LexGLUE is modeled after the criteria used in SuperGLUE and focuses on European and US legal systems. To extend our evaluation to the Indian legal system, we incorporated the LegalEval tasks, enriching our benchmark's scope.
-
-### Installation and Setup
-
-[Provide detailed installation and setup instructions here, including any dependencies or requirements necessary to work with the corpus.]
-
-### Usage
-
-[Explain how users can utilize the corpus in their research or AI applications, possibly with code snippets or example usage scenarios.]
-
-### Credits
-
-[If applicable, acknowledge any collaborators, contributors, or sources of third-party assets.]
-### License
-
-[Specify the licensing details for your project. Choose an appropriate license at choosealicense.com if necessary.]
-
-
-## Continuous fine-tuning:
-```bash
-cd mask-bert
-python3 main.py --data-path /home/belfathi/mask-bert/data --mask-strategy default --num-epochs 4
-```
-
-## lexlama:
-```bash
-git clone https://github.com/coastalcph/lexlms
-cd lexlms
-model=PATH/TO/MODEL
-python -m legal_lama.run_experiments --model_name_or_path ${model} --vocab_constraint true
-```
-
-```python
-# Scores to csv
-import re
-# It needs to be the 'ecthr_articles' output because it is the first it holds everything
-path_to_output = 'output/results_fair_eval/ecthr_articles/.._mask-bert_models_bert-base-uncased-e4-b16-tfidf-DEBUG1000_checkpoint-7500_constrained'
-with open(path_to_output + '/info.log') as f:
-    lines = [l.strip() for l in f if 'args' in l or 'global' in l]
-out = ""
-for l in lines:
-    m = re.search(r"dataset_filename='data/(.*).jsonl'", l)
-    if m:
-        out += m.group(1) + '\n'
-    else:
-        a, b = l.split(':')
-        out += f'{a}: {float(b)*100:2.2f}\n'
-print(re.subn(r'(\w+)\nglobal MRR: ([\d\.]+)\nglobal Precision at 1: ([\d\.]+)', r'\1;\2;\3', out)[0])
-```
-
-## lex_glue
-```bash
-# git clone https://github.com/coastalcph/lex-glue
-# I did some changed (scripts take CLI arguments)
-git clone --branch update_scripts https://github.com/ygorg/lex-glue
-cd lex-glue
-model=../mask-bert/models/bert-base-uncased-e4-b16-default-DEBUG1000/checkpoint-7500
-gpu=0  # same usage as CUDA_VISIBLE_DEVICES
-for EXP_SCRIPT in scripts/run*.sh ; do
-	PYTHONPATH="." $EXP_SCRIPT ${model} ${gpu}
-```
--->
+@misc{belfathi2024language,
+      title={Language Model Adaptation to Specialized Domains through Selective Masking based on Genre and Topical Characteristics}, 
+      author={Anas Belfathi and Ygor Gallina and Nicolas Hernandez and Richard Dufour and Laura Monceaux},
+      year={2024},
+      url={https://arxiv.org/abs/2402.12036},
+      eprint={2402.12036},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL}
+}
