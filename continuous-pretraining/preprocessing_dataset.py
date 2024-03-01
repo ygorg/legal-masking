@@ -67,7 +67,7 @@ def main():
 
         parser.add_argument("--model-checkpoint", type=str, default="bert-base-uncased", help="Model name (or path) of huggingface model (default: bert-base-uncased)")
 
-        parser.add_argument("--mask-strategy", type=str, choices=masking_strategies, default='weighted_random', help="Scoring function to use for masking tokens (default: default)")
+        parser.add_argument("--mask-strategy", type=str, choices=masking_strategies, default='default', help="Scoring function to use for masking tokens (default: default)")
         parser.add_argument("--term-path", type=str, default=None, help="Path to list of terms (one term per line)")
 
         parser.add_argument("--chunk-size", type=int, default=128, help="Split the documents into sequences of X tokens (default: 128)")

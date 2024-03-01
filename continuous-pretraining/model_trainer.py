@@ -4,7 +4,12 @@ import logging
 
 import torch
 from transformers import AutoModelForMaskedLM, TrainingArguments, Trainer
-import idr_torch
+try:
+    import idr_torch
+    JZ = True  # JeanZay
+except ModuleNotFoundError:
+    JZ = False
+
 
 def initialize_model_and_trainer(
         tokenized_datasets, data_collator, tokenizer,
@@ -52,7 +57,8 @@ def initialize_model_and_trainer(
         use_mps_device=str(model.device).startswith('mps')  # For MacOS
     )
 
-    training_args.local_rank = idr_torch.local_rank
+    if JZ:
+        training_args.local_rank = idr_torch.local_rank
 
     # Initialize the Trainer
     trainer = Trainer(

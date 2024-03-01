@@ -43,7 +43,7 @@ def main():
         # Training arguments
         parser.add_argument("--batch-size", type=int, default=32, help="Training/Evaluation batch size (default: 32)")
         parser.add_argument("--num-epochs", type=int, default=3, help="Number of training epochs (default: 3)")
-        parser.add_argument("--jean-zay-config", type=str, default="1", help="Configuration de jeanzay (node, gpu...)")
+        parser.add_argument("--jean-zay-config", type=str, default="1", help="Configuration de jeanzay (node, gpu...) for debug purposes (default: 1)")
 
         parser.add_argument("--no-distributed", action='store_true', help="Do not use distributed training.")
 
