@@ -29,6 +29,68 @@ We selected the following (sub-)corpora, according to their legal systems:
 * India: Indian Court Decisions ([lex_files](https://huggingface.co/datasets/lexlms/lex_files/blob/main/) : `indian_courts_cases.zip`)
 * United States: SCOTUS Opinion ([gqfiddler/scotus-opinions](https://www.kaggle.com/datasets/gqfiddler/scotus-opinions))
 
+### Formatting SCOTUS Opinion
+
+To format the SCOTUS Opinion data, the following Python code was used:
+
+```python
+import pandas as pd
+import pandas as pd
+import json
+import uuid
+from sklearn.model_selection import train_test_split
+
+df = pd.read_csv("./LeXFiles/opinions_since_1970.csv")
+
+# Split the DataFrame into train, validation, and test sets (adjust the proportions as needed)
+train_df, temp_df = train_test_split(df, test_size=0.3, random_state=42)
+validation_df, test_df = train_test_split(temp_df, test_size=0.5, random_state=42)
+
+# Function to write a DataFrame to a .jsonl file
+def write_to_jsonl(file_name, dataframe):
+    with open(file_name, 'w') as file:
+        for _, row in dataframe.iterrows():
+            data = {'id': row['id'], 'text': row['text']}
+            file.write(json.dumps(data) + '\n')
+
+# Write each set to a .jsonl file
+write_to_jsonl('./SCOTUS/train.jsonl', train_df)
+write_to_jsonl('./SCOTUS/validation.jsonl', validation_df)
+write_to_jsonl('./SCOTUS/test.jsonl', test_df)
+```
+
+### Preparing the Dataset
+
+For preparing the dataset, the following code was utilized:
+
+```python
+import pandas as pd
+from datasets import Dataset
+
+# Function to load a jsonl file into a DataFrame
+def load_jsonl_to_df(filepath):
+    return pd.read_json(filepath, lines=True)
+
+# Assuming file paths are known
+zip_files = ['SCOTUS.zip', 'ecthr_cases.zip', 'eurlex.zip', 'indian_courts_cases.zip']
+data_types = ['train', 'validation', 'test']
+
+# Initialize empty DataFrames
+combined_data = {data_type: pd.DataFrame() for data_type in data_types}
+
+# Process each zip file
+for zip_file in zip_files:
+    # Unzip the file (assuming it's in the current directory)
+    !unzip {zip_file} -d temp_data
+
+    # Load each data type
+    for data_type in data_types:
+        df = load_jsonl_to_df(f'{zipfile}/{data_type}.jsonl') # replace zipfile par temp_data
+        combined_data[data_type] = pd.concat([combined_data[data_type], df])
+
+# Convert to Hugging Face Dataset
+datasets = {data_type: Dataset.from_pandas(df) for data_type, df in combined_data.items()}
+```
 ## Continuous-pretraining
 
 1. Download models (and their tokenizers)
