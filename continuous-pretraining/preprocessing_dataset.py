@@ -1,9 +1,12 @@
 import os
+import json
 import logging
 import argparse
+
+from datasets import Dataset
+
 from my_tokenize import initialize_tokenizer
 from my_tokenize import tokenize_function, group_texts
-import data_setup
 from custom_data_collator import (
     DataCollatorForTermSpecificMasking,
     DataCollatorForWholeWordMask,
@@ -54,6 +57,43 @@ def apply_to_batch(fct, batch, kwargs_fct={}):
             new_batch[k].append(v)
 
     return new_batch
+
+
+def load_dataset(data_dir, num_examples=None):
+    if num_examples is not None:
+        logging.warning(f"Loading only {num_examples} examples, this is not expected for training/testing.")
+
+    # ... [Existing function code remains unchanged]
+    def load_dataset_from_json(file_path):
+        with open(file_path, 'r') as file:
+            if num_examples is None:
+                data_list = [json.loads(line) for line in file]
+            else:
+                data_list = []
+                for i in range(num_examples):
+                    line = next(file, None)
+                    if line is None:
+                        break
+                    data_list.append(json.loads(line))
+
+        data = {key: [dic[key] for dic in data_list] for key in data_list[0]}
+        return Dataset.from_dict(data)
+
+    dataset_dict = {}
+    for split in ['train', 'validation', 'test']:
+        file_path = os.path.join(data_dir, f'{split}.json')
+
+        logging.info(f"Loading dataset from {file_path}")
+
+        dataset = load_dataset_from_json(file_path)
+        if not dataset:
+            logging.error(f"No data loaded for {split}.")
+        else:
+            logging.info(f"{len(dataset)} examples loaded.")
+
+        dataset_dict[split] = dataset
+
+    return dataset_dict
 
 
 def main():
@@ -148,7 +188,7 @@ def main():
     # =================================================================
     # Pre processing data
     # =================================================================
-    datasets = data_setup.load_dataset(data_dir, num_example)
+    datasets = load_dataset(data_dir, num_example)
 
     tokenizer = initialize_tokenizer(model_checkpoint=model_checkpoint)
 
@@ -202,10 +242,11 @@ def main():
 
     tokenized_datasets = {}
     for split, dataset in datasets.items():
+        print(list(dataset.features.keys()))
         tokenized_datasets[split] = dataset.map(
             lambda examples: tokenize_function(tokenizer, examples),
             batched=True,
-            remove_columns=['id', 'text', 'sector', 'descriptor', 'year', '__index_level_0__'],
+            remove_columns=dataset.features.keys(),
             cache_file_name=cache_fn_tokenize[split],
             load_from_cache_file=load_from_cache_file
         )
