@@ -5,6 +5,7 @@ from glob import glob
 from collections import defaultdict
 
 import pandas as pd
+from scipy.stats import ttest_ind
 
 
 def arguments():
@@ -16,7 +17,6 @@ def arguments():
     parser.add_argument('--round', type=int, default="2", help="Rounding precision (default: 2).")
     parser.add_argument('-r', '--raw', action="store_true", help="Print all results as csv (will not print result table).")
     parser.add_argument('--sep', type=str, default='.', help="Separator for decimal in csv (default: '.').")
-    parser.add_argument('--std', action="store_true", help="Compute std as well as mean.")
     return parser.parse_args()
 
 
@@ -32,6 +32,8 @@ for task_path in glob(os.path.join(root_path, '*')):
     for model_path in glob(os.path.join(task_path, '*')):
         model = os.path.split(model_path)[-1]
         model = model.replace('legal-bert', 'legal_bert').replace('top-n', 'topn').replace('random-weighted', 'rand').replace('-base-uncased', '_base_uncased')
+        model = model.replace('legal_bert', 'legalbert')
+        model = model.replace('_base_uncased', '')
         model = model.split('-')
         if len(model) == 1:
             model += ['', '']
@@ -48,8 +50,8 @@ for task_path in glob(os.path.join(root_path, '*')):
                 continue
             with open(score_fn) as f:
                 data = json.load(f)
-                all_scores[(task, *model, seed)]["macro-f1"] = data["predict_macro-f1"]
-                all_scores[(task, *model, seed)]["micro-f1"] = data["predict_micro-f1"]
+                all_scores[(task, *model, seed)]["macro-f1"] = round(data.get('predict_macro-f1', 0) * 100, args.round)
+                all_scores[(task, *model, seed)]["micro-f1"] = round(data.get('predict_micro-f1', 0) * 100, args.round)
 
 if not all_scores:
     logging.error('Could not find scores.')
@@ -58,7 +60,7 @@ if not all_scores:
 
 # Using pandas create a nice result table or export the results to excel
 df = pd.DataFrame(all_scores).T
-df = df * 100
+# df = df * 100
 df.index.names = ["task", "model", "weight", "strat", "seed"]
 df = df.reset_index()
 
@@ -79,33 +81,48 @@ def confidence(vals):
     )
 
 
-agg = {
-    'seed': ['count'],
-    'macro-f1': ['mean'],
-    'micro-f1': ['mean'],
-}
-if args.std:
-    agg['macro-f1'].append('std')
-    agg['micro-f1'].append('std')
+def signif(sdf):
+    global df
+    baseline = df.loc[df['model'] == sdf['model'].iloc[0]]\
+                 .loc[df['task'] == sdf['task'].iloc[0]]\
+                 .loc[df['weight'] == 'baseline']\
+                 .loc[df['strat'] == 'cpt']
+
+    new_values = {}
+    new_values['nseed'] = len(sdf)
+    for m in ['micro-f1', 'macro-f1']:
+        baseline_res = baseline[m]
+        model_res = sdf[m]
+
+        t_statistic, p_value = ttest_ind(baseline_res, model_res)
+        if p_value < 0.01:
+            interpretation = '++'
+        elif p_value < 0.05:
+            interpretation = '+'
+        else:
+            interpretation = ''
+
+        new_values[m] = f'{sdf[m].mean():.2f} {interpretation}'
+    return pd.Series(new_values)
 
 
 metrics = df.groupby(['model', 'weight', 'strat', 'task'])\
-            .agg(agg)
+            .apply(signif)
 
 # Warn if number of seed is inconsistent
-most_common_nb_seeds = metrics[('seed', 'count')].mode()[0]
-missing_seed = metrics[metrics[('seed', 'count')] != most_common_nb_seeds].index
+most_common_nb_seeds = metrics['nseed'].mode()[0]
+missing_seed = metrics[metrics['nseed'] != most_common_nb_seeds].index
 for i in missing_seed:
-    logging.warning(f"Beware ! {i} was computed on {int(metrics.loc[i]['seed'].iloc[0])} seeds and not {most_common_nb_seeds} as the rest.")
+    logging.warning(f"Beware ! {i} was computed on {int(metrics.loc[i]['nseed'])} seeds and not {most_common_nb_seeds} as the rest.")
 
-metrics = metrics.drop(columns=('seed', 'count'))
+metrics = metrics.drop(columns=('nseed'))
 
 # Group by task
 table = metrics.unstack(3)
 # Nicely display per task
-table.columns = table.columns.swaplevel(0, 2)
+table.columns = table.columns.swaplevel(0, 1)
 table.sort_index(axis=1, level=0, inplace=True)
-table = table.round(args.round)
+# table = table.round(args.round)
 
 if args.to_latex:
     print(table.to_latex())
