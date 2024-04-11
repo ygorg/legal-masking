@@ -30,19 +30,7 @@ all_scores = defaultdict(lambda: {"macro-f1": [], "micro-f1": []})
 for task_path in glob(os.path.join(root_path, '*')):
     task = os.path.split(task_path)[-1]
     for model_path in glob(os.path.join(task_path, '*')):
-        model = os.path.split(model_path)[-1]
-        model = model.replace('legal-bert', 'legal_bert').replace('top-n', 'topn').replace('random-weighted', 'rand').replace('-base-uncased', '_base_uncased')
-        model = model.replace('legal_bert', 'legalbert')
-        model = model.replace('_base_uncased', '')
-        model = model.split('-')
-        if len(model) == 1:
-            model += ['', '']
-        if len(model) == 2:
-            if model[1] in ('rand', 'topn'):
-                model = [model[0], '', model[1]]
-            else:
-                model += ['']
-        model = tuple(model)
+        model_name = os.path.split(model_path)[-1]
         for seed_path in glob(os.path.join(model_path, '*')):
             seed = os.path.split(seed_path)[-1]
             score_fn = os.path.join(seed_path, "predict_results.json")
@@ -50,8 +38,9 @@ for task_path in glob(os.path.join(root_path, '*')):
                 continue
             with open(score_fn) as f:
                 data = json.load(f)
-                all_scores[(task, *model, seed)]["macro-f1"] = round(data.get('predict_macro-f1', 0) * 100, args.round)
-                all_scores[(task, *model, seed)]["micro-f1"] = round(data.get('predict_micro-f1', 0) * 100, args.round)
+            all_scores[(task, model_name, seed)]["macro-f1"] = round(data.get('predict_macro-f1', 0) * 100, args.round)
+            all_scores[(task, model_name, seed)]["micro-f1"] = round(data.get('predict_micro-f1', 0) * 100, args.round)
+
 
 if not all_scores:
     logging.error('Could not find scores.')
@@ -60,40 +49,44 @@ if not all_scores:
 
 # Using pandas create a nice result table or export the results to excel
 df = pd.DataFrame(all_scores).T
-# df = df * 100
-df.index.names = ["task", "model", "weight", "strat", "seed"]
+df.index.names = ["task", "path", "seed"]
 df = df.reset_index()
+# df = df * 100
+
+# extract parameters from model_path
+df["model"] = df["path"].map(lambda x: x.split('-')[0])  # should be "bert" or "legalbert"
+df["weight"] = df["path"].map(lambda x: x.split('-')[-2])  # should be "tfidf", "meta" or "cft"
+df["strat"] = df["path"].map(lambda x: x.split('-')[-1])  # should be "topn" or "rw"
 
 if args.raw:
+    # Save to csv
     print(df.to_csv(decimal=args.sep, index=False))
     # df.to_excel('results.xlsx', index=False)
     exit()
 
 
-def confidence(vals):
-    from numpy import sqrt
-    from scipy import stats
-
-    return stats.norm.interval(
-        0.95,
-        loc=vals.mean(),
-        scale=vals.std() / sqrt(len(vals))
-    )
-
-
 def signif(sdf):
     global df
+    # `sdf` contains all the seeds results for a particular model
+    # we search in the global df (that contains everything)
+    #  the baseline that corresponds to the current model
     baseline = df.loc[df['model'] == sdf['model'].iloc[0]]\
                  .loc[df['task'] == sdf['task'].iloc[0]]\
                  .loc[df['weight'] == 'baseline']\
                  .loc[df['strat'] == 'cpt']
 
+    # The line that we will return
     new_values = {}
+    # Count the number of seeds (number of lines we got)
     new_values['nseed'] = len(sdf)
-    for m in ['micro-f1', 'macro-f1']:
-        baseline_res = baseline[m]
-        model_res = sdf[m]
 
+    # For each metric
+    for m in ['micro-f1', 'macro-f1']:
+        # Get the score
+        baseline_res = baseline[m]  # 1 value
+        model_res = sdf[m]  # `nseed` values
+
+        # Compute significance test
         t_statistic, p_value = ttest_ind(baseline_res, model_res)
         if p_value < 0.01:
             interpretation = '++'
@@ -102,19 +95,26 @@ def signif(sdf):
         else:
             interpretation = ''
 
+        # Display the significance along the score
         new_values[m] = f'{sdf[m].mean():.2f} {interpretation}'
+
+    # Return the result of the aggregation of the lines of `sdf`
     return pd.Series(new_values)
 
 
+# Groupby aggregate all the seeds in only one row :
+# - compute mean of each metric
+# - compute significance
 metrics = df.groupby(['model', 'weight', 'strat', 'task'])\
             .apply(signif)
 
 # Warn if number of seed is inconsistent
-most_common_nb_seeds = metrics['nseed'].mode()[0]
+most_common_nb_seeds = metrics['nseed'].mode()[0]  # .mode() returns the values ordered by frequency
 missing_seed = metrics[metrics['nseed'] != most_common_nb_seeds].index
 for i in missing_seed:
     logging.warning(f"Beware ! {i} was computed on {int(metrics.loc[i]['nseed'])} seeds and not {most_common_nb_seeds} as the rest.")
 
+# We warned no need to keep the number of seeds anymore
 metrics = metrics.drop(columns=('nseed'))
 
 # Group by task
