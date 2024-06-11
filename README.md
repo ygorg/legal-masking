@@ -11,7 +11,7 @@ Recent advances in pre-trained language modeling have facilitated significant pr
 ## Training Corpus
 
 Our aim was to cover all legal systems appearing in the LexGLUE benchmark as well as [LegalEval](https://sites.google.com/view/legaleval/home) and limit the total size of the corpus.
-We chose to limit our dataset to 4GB (similar to [DrBERT](https://aclanthology.org/2023.acl-long.896/)).
+We chose to limit our dataset to 4GB.
 
 We use :
 - a subset of [lexlms/lex_files](https://huggingface.co/datasets/lexlms/lex_files), a diverse English multinational legal corpus. It features $\approx$ 19 billion tokens across 11 distinct sub-corpora. It covers legislation and case law from six major English-speaking legal systems:
