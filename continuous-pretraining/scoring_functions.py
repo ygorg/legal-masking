@@ -129,7 +129,6 @@ class MetaDiscourseScoring(ScoringFunction):
                 connector_words=ENGLISH_CONNECTOR_WORDS, scoring="npmi"
             )
 
-            self.phrase_model.add_vocab(docs)  # add new sentences to model
             if self.cache_file_phrasemodel is not None:
                 logging.info(f"Cacheing phrase model to {self.cache_file_phrasemodel}")
                 self.phrase_model.save(self.cache_file_phrasemodel)
