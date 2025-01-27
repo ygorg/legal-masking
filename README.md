@@ -111,9 +111,9 @@ python experiments/${TASK}.py \
 ```bash
 python3 show_results.py --logdir lex-glue/logs
 ```
-
-## Results
 <!--
+## Results
+
 <p align="center">
   <img src="_assets/results.png" alt="Project Logo" />
 </p>
