@@ -118,27 +118,3 @@ python3 show_results.py --logdir lex-glue/logs
   <img src="_assets/results.png" alt="Project Logo" />
 </p>
 
-
-## Credits
-
-This work was granted access to the HPC resources of IDRIS under the allocation 2023-AD011014882 made by GENCI.
-
-This research was funded, in whole or in part, by l'Agence Nationale de la Recherche (ANR), project NR-22-CE38-0004.
-
-## License
-
-[Specify the licensing details for your project. Choose an appropriate license at choosealicense.com if necessary.]
-
-## Citation
-
-```
-@misc{belfathi2024language,
-      title={Language Model Adaptation to Specialized Domains through Selective Masking based on Genre and Topical Characteristics}, 
-      author={Anas Belfathi and Ygor Gallina and Nicolas Hernandez and Richard Dufour and Laura Monceaux},
-      year={2024},
-      url={https://arxiv.org/abs/2402.12036},
-      eprint={2402.12036},
-      archivePrefix={arXiv},
-      primaryClass={cs.CL}
-}
-```
